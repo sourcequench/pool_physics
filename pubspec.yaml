@@ -3,7 +3,7 @@ description: >-
   A validated billiards physics simulation constrained by Dr. Dave Alciatore's
   experimental results. Pure Dart — no Flutter dependency.
 version: 0.1.0
-repository: https://github.com/ryanshea/pool_physics
+repository: https://github.com/sourcequench/pool_physics
 
 environment:
   sdk: '>=3.0.0 <4.0.0'
