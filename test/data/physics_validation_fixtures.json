@@ -1,0 +1,122 @@
+[
+  {
+    "id": "shared_high_left_short_rail",
+    "source": "user-observed-shot; geometry decoded from shared URL",
+    "table": "nine",
+    "balls": [
+      {"id": "cue", "type": "cue", "x": 0.1549, "y": 0.4505},
+      {"id": "one", "type": "one", "x": 0.1101, "y": 0.2121}
+    ],
+    "shot": {
+      "cueBallId": "cue",
+      "aimDir": [-0.2807, -0.9598],
+      "speedMs": 1.1176,
+      "hitX": -0.6919,
+      "hitY": 0.722
+    },
+    "expectation": {
+      "cueMustContactObject": true,
+      "cueMustHavePostContactPath": true,
+      "positionToleranceM": 0.003
+    }
+  },
+  {
+    "id": "shared_right_follow_sign",
+    "source": "user-observed-shot; geometry decoded from shared URL",
+    "table": "nine",
+    "balls": [
+      {"id": "cue", "type": "cue", "x": 0.1711, "y": 0.4116},
+      {"id": "one", "type": "one", "x": 0.1106, "y": 0.1991}
+    ],
+    "shot": {
+      "cueBallId": "cue",
+      "aimDir": [-0.4325, -0.9016],
+      "speedMs": 2.6822,
+      "hitX": 0.2554,
+      "hitY": 0.9668
+    },
+    "expectation": {
+      "cueMustContactObject": true,
+      "cueMustHavePostContactPath": true,
+      "positionToleranceM": 0.003
+    }
+  },
+  {
+    "id": "calibration_pure_follow",
+    "source": "Dr. Dave / Alciatore post-impact trajectory family; analytical fixture pending digitized reference",
+    "table": "nine",
+    "balls": [
+      {"id": "cue", "type": "cue", "x": 0.20, "y": 0.50},
+      {"id": "one", "type": "one", "x": 0.40, "y": 0.50}
+    ],
+    "shot": {
+      "cueBallId": "cue",
+      "aimDir": [1.0, 0.0],
+      "speedMs": 1.0,
+      "hitX": 0.0,
+      "hitY": 0.85
+    },
+    "expectation": {
+      "cueMustContactObject": true,
+      "cueMustHavePostContactPath": true,
+      "positionToleranceM": 0.003
+    }
+  },
+  {
+    "id": "shared_default_top_left_6mph",
+    "source": "user-observed-shot; exact shared URL decoded from production report",
+    "table": "nine",
+    "balls": [
+      {"id": "cue", "type": "cue", "x": 0.8991, "y": 0.8284}
+    ],
+    "shot": {
+      "cueBallId": "cue",
+      "aimDir": [-0.8202, -0.5721],
+      "speedMs": 2.6822,
+      "hitX": -0.4286,
+      "hitY": 0.4643
+    },
+    "expectation": {
+      "maxCushionContacts": 9,
+      "positionToleranceM": 0.003
+    }
+  },
+  {
+    "id": "shared_top_left_follow_6mph",
+    "source": "user-observed-shot; exact shared URL decoded from production report",
+    "table": "nine",
+    "balls": [
+      {"id": "cue", "type": "cue", "x": 0.9082, "y": 0.8422}
+    ],
+    "shot": {
+      "cueBallId": "cue",
+      "aimDir": [-0.8186, -0.5743],
+      "speedMs": 2.6822,
+      "hitX": -0.3929,
+      "hitY": 0.6071
+    },
+    "expectation": {
+      "maxCushionContacts": 9,
+      "positionToleranceM": 0.003
+    }
+  },
+  {
+    "id": "shared_top_left_follow_6mph_second",
+    "source": "user-observed-shot; exact shared URL decoded from production report",
+    "table": "nine",
+    "balls": [
+      {"id": "cue", "type": "cue", "x": 0.912, "y": 0.8307}
+    ],
+    "shot": {
+      "cueBallId": "cue",
+      "aimDir": [-0.8255, -0.5643],
+      "speedMs": 2.6822,
+      "hitX": 0.4113,
+      "hitY": 0.9115
+    },
+    "expectation": {
+      "maxCushionContacts": 9,
+      "positionToleranceM": 0.003
+    }
+  }
+]
