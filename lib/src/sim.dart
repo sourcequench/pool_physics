@@ -112,7 +112,9 @@ class _Cfg {
   // The rail nose is suppressed only where the rounded jaw/facing geometry
   // takes over. This includes one ball radius beyond the mouth tip.
   double get cornerPocketDetectR => cornerJawR + _R * 1.2;
-  double get sidePocketHalfW => 0.076 * W / 2.54;
+  // TP 3.5's representative side-pocket mouth is 5.0625 in wide. Keep the
+  // nominal 5 in mouth as a full width; pocket detection is centered on it.
+  double get sidePocketHalfW => sideMouthInches * inchesToMeters / 2;
   double get sidePocketDepth => 0.030 * W / 2.54;
 
   static _Cfg from(PhysicsTableConfig config) => _Cfg(
@@ -441,6 +443,8 @@ class _Ball {
 ///
 /// [ballBallFrictionScale] multiplies Alciatore's friction curve uniformly —
 /// useful for ball-condition sensitivity studies (Dr. Dave TP A.17).
+/// [forSolver] omits replay frames and research-only trajectory diagnostics
+/// while preserving the simulated physics and collision/path details.
 PhysicsResult simulate({
   required List<PhysicsBall> balls,
   required String cueBallId,
@@ -449,14 +453,25 @@ PhysicsResult simulate({
   CushionProfile cushion = CushionProfile.standardPool,
   int shotIndex = 0,
   bool forPreview = false,
+  bool forSolver = false,
   double? maxTimeSeconds,
   double ballBallFrictionScale = 1.0,
+  double ballBallRestitution = _eBall,
 }) {
   if (!ballBallFrictionScale.isFinite || ballBallFrictionScale < 0) {
     throw ArgumentError.value(
       ballBallFrictionScale,
       'ballBallFrictionScale',
       'must be finite and non-negative',
+    );
+  }
+  if (!ballBallRestitution.isFinite ||
+      ballBallRestitution < 0 ||
+      ballBallRestitution > 1) {
+    throw ArgumentError.value(
+      ballBallRestitution,
+      'ballBallRestitution',
+      'must be finite and in [0, 1]',
     );
   }
   final dt = forPreview ? 0.003 : _dt;
@@ -489,33 +504,37 @@ PhysicsResult simulate({
   }
   // Animation frames: all non-pocketed balls at each _recordEvery timestep.
   final frames = <Map<String, Vec2>>[];
-  frames.add({
-    for (final b in simBalls)
-      if (!b.pocketed) b.id: _metersToRel(b.pos, cfg),
-  });
-  final peakHeights = <String, double>{
-    for (final b in simBalls) b.id: b.pos3.z,
-  };
+  if (!forSolver) {
+    frames.add({
+      for (final b in simBalls)
+        if (!b.pocketed) b.id: _metersToRel(b.pos, cfg),
+    });
+  }
+  final peakHeights = forSolver
+      ? <String, double>{}
+      : <String, double>{for (final b in simBalls) b.id: b.pos3.z};
   final tableBounceCounts = <String, int>{for (final b in simBalls) b.id: 0};
-  final tableBounceDistancesMeters = <String, List<double>>{
-    for (final b in simBalls) b.id: <double>[],
-  };
-  final tableBounceSpeedsMs = <String, List<double>>{
-    for (final b in simBalls) b.id: <double>[],
-  };
-  final tableBounceSpinRps = <String, List<double>>{
-    for (final b in simBalls) b.id: <double>[],
-  };
-  final horizontalDistanceMeters = <String, double>{
-    for (final b in simBalls) b.id: 0.0,
-  };
-  final peakSpinZ = <String, double>{
-    for (final b in simBalls) b.id: b.spinZ.abs(),
-  };
-  final peakSpinRpm = <String, double>{
-    for (final b in simBalls)
-      b.id: b.angularVelocity.length * _radiansPerSecondToRpm,
-  };
+  final tableBounceDistancesMeters = forSolver
+      ? <String, List<double>>{}
+      : <String, List<double>>{for (final b in simBalls) b.id: <double>[]};
+  final tableBounceSpeedsMs = forSolver
+      ? <String, List<double>>{}
+      : <String, List<double>>{for (final b in simBalls) b.id: <double>[]};
+  final tableBounceSpinRps = forSolver
+      ? <String, List<double>>{}
+      : <String, List<double>>{for (final b in simBalls) b.id: <double>[]};
+  final horizontalDistanceMeters = forSolver
+      ? <String, double>{}
+      : <String, double>{for (final b in simBalls) b.id: 0.0};
+  final peakSpinZ = forSolver
+      ? <String, double>{}
+      : <String, double>{for (final b in simBalls) b.id: b.spinZ.abs()};
+  final peakSpinRpm = forSolver
+      ? <String, double>{}
+      : <String, double>{
+          for (final b in simBalls)
+            b.id: b.angularVelocity.length * _radiansPerSecondToRpm,
+        };
   final sideSpinRatioAtRoll = <String, double>{};
 
   double t = 0.0;
@@ -541,8 +560,15 @@ PhysicsResult simulate({
     final previousAngularVelocities = <String, Vec3>{
       for (final b in simBalls) b.id: b.angularVelocity,
     };
-    final previousBounceCounts = Map<String, int>.of(tableBounceCounts);
-    _applyFriction(simBalls, tableBounceCounts, cfg, sideSpinRatioAtRoll);
+    final previousBounceCounts = forSolver
+        ? const <String, int>{}
+        : Map<String, int>.of(tableBounceCounts);
+    _applyFriction(
+      simBalls,
+      tableBounceCounts,
+      cfg,
+      forSolver ? null : sideSpinRatioAtRoll,
+    );
     final hitInfo = _resolveCollisions(
       simBalls,
       cueBallId,
@@ -551,6 +577,7 @@ PhysicsResult simulate({
       previousVelocities: previousVelocities,
       previousAngularVelocities: previousAngularVelocities,
       ballBallFrictionScale: ballBallFrictionScale,
+      ballBallRestitution: ballBallRestitution,
       timeSec: t,
       timeStepSec: dt,
       contactDetails: ballBallContactDetails,
@@ -559,16 +586,22 @@ PhysicsResult simulate({
       cueContactStep = step;
       ghostBallMeters = hitInfo;
     }
-    for (final b in simBalls) {
-      final previous = previousPositions[b.id]!;
-      final dx = b.pos3.x - previous.x;
-      final dy = b.pos3.y - previous.y;
-      horizontalDistanceMeters[b.id] =
-          horizontalDistanceMeters[b.id]! + math.sqrt(dx * dx + dy * dy);
-      if (tableBounceCounts[b.id]! > previousBounceCounts[b.id]!) {
-        tableBounceDistancesMeters[b.id]!.add(horizontalDistanceMeters[b.id]!);
-        tableBounceSpeedsMs[b.id]!.add(b.vel3.length);
-        tableBounceSpinRps[b.id]!.add(b.angularVelocity.length / (2 * math.pi));
+    if (!forSolver) {
+      for (final b in simBalls) {
+        final previous = previousPositions[b.id]!;
+        final dx = b.pos3.x - previous.x;
+        final dy = b.pos3.y - previous.y;
+        horizontalDistanceMeters[b.id] =
+            horizontalDistanceMeters[b.id]! + math.sqrt(dx * dx + dy * dy);
+        if (tableBounceCounts[b.id]! > previousBounceCounts[b.id]!) {
+          tableBounceDistancesMeters[b.id]!.add(
+            horizontalDistanceMeters[b.id]!,
+          );
+          tableBounceSpeedsMs[b.id]!.add(b.vel3.length);
+          tableBounceSpinRps[b.id]!.add(
+            b.angularVelocity.length / (2 * math.pi),
+          );
+        }
       }
     }
     final cushionContactIds = <String>{};
@@ -609,14 +642,16 @@ PhysicsResult simulate({
       }
     }
     _checkPockets(simBalls, cfg);
-    for (final b in simBalls) {
-      if (b.pos3.z > (peakHeights[b.id] ?? _R)) peakHeights[b.id] = b.pos3.z;
-      if (b.spinZ.abs() > (peakSpinZ[b.id] ?? 0.0)) {
-        peakSpinZ[b.id] = b.spinZ.abs();
-      }
-      final spinRpm = b.angularVelocity.length * _radiansPerSecondToRpm;
-      if (spinRpm > (peakSpinRpm[b.id] ?? 0.0)) {
-        peakSpinRpm[b.id] = spinRpm;
+    if (!forSolver) {
+      for (final b in simBalls) {
+        if (b.pos3.z > (peakHeights[b.id] ?? _R)) peakHeights[b.id] = b.pos3.z;
+        if (b.spinZ.abs() > (peakSpinZ[b.id] ?? 0.0)) {
+          peakSpinZ[b.id] = b.spinZ.abs();
+        }
+        final spinRpm = b.angularVelocity.length * _radiansPerSecondToRpm;
+        if (spinRpm > (peakSpinRpm[b.id] ?? 0.0)) {
+          peakSpinRpm[b.id] = spinRpm;
+        }
       }
     }
 
@@ -625,10 +660,12 @@ PhysicsResult simulate({
       for (final b in simBalls) {
         if (b.isMoving) pathPoints[b.id]!.add(_metersToRel(b.pos, cfg));
       }
-      frames.add({
-        for (final b in simBalls)
-          if (!b.pocketed) b.id: _metersToRel(b.pos, cfg),
-      });
+      if (!forSolver) {
+        frames.add({
+          for (final b in simBalls)
+            if (!b.pocketed) b.id: _metersToRel(b.pos, cfg),
+        });
+      }
     }
 
     if (simBalls.every((b) => !b.isMoving)) break;
@@ -637,14 +674,16 @@ PhysicsResult simulate({
   // Preserve terminal state in the replay. A ball can be pocketed between
   // samples, then stop the simulation before the next regular frame is due.
   // Without this frame the animation freezes on the last pre-drop position.
-  final finalFrame = {
-    for (final b in simBalls)
-      if (!b.pocketed) b.id: _metersToRel(b.pos, cfg),
-  };
-  final lastFrame = frames.last;
-  final frameChanged = lastFrame.length != finalFrame.length ||
-      finalFrame.entries.any((entry) => lastFrame[entry.key] != entry.value);
-  if (frameChanged) frames.add(finalFrame);
+  if (!forSolver) {
+    final finalFrame = {
+      for (final b in simBalls)
+        if (!b.pocketed) b.id: _metersToRel(b.pos, cfg),
+    };
+    final lastFrame = frames.last;
+    final frameChanged = lastFrame.length != finalFrame.length ||
+        finalFrame.entries.any((entry) => lastFrame[entry.key] != entry.value);
+    if (frameChanged) frames.add(finalFrame);
+  }
 
   final endPositions = <String, Vec2?>{};
   final pocketPositions = <String, Vec2>{};
@@ -917,7 +956,7 @@ void _applyFriction(
   List<_Ball> balls,
   Map<String, int> tableBounceCounts,
   _Cfg cfg,
-  Map<String, double> sideSpinRatioAtRoll,
+  Map<String, double>? sideSpinRatioAtRoll,
 ) {
   for (final b in balls) {
     if (!b.active) continue;
@@ -942,7 +981,7 @@ void _applyFriction(
           final rolling = b.vel - vcDir * (vcSpeed / 3.5);
           b.vel = rolling;
           b.spin = rolling;
-          sideSpinRatioAtRoll.putIfAbsent(
+          sideSpinRatioAtRoll?.putIfAbsent(
             b.id,
             () => b.vel.distance > 1e-9
                 ? b.spinZ.abs() * _R / b.vel.distance
@@ -1073,6 +1112,7 @@ _HertzChainResolution _resolveHertzChains(
   Map<String, Vec3>? previousVelocities,
   Map<String, Vec3>? previousAngularVelocities,
   double durationSeconds,
+  double ballBallRestitution,
 ) {
   if (balls.length < 3 ||
       previousPositions == null ||
@@ -1195,7 +1235,7 @@ _HertzChainResolution _resolveHertzChains(
       positions: initialPositions,
       velocities: initialVelocities,
       durationSeconds: durationSeconds,
-      normalRestitution: _eBall,
+      normalRestitution: ballBallRestitution,
     );
     Vec2? clusterCueContact;
     final cueIndex = ordered.indexWhere((i) => balls[i].id == cueBallId);
@@ -1251,6 +1291,7 @@ Vec2? _resolveCollisions(
   Map<String, Vec3>? previousVelocities,
   Map<String, Vec3>? previousAngularVelocities,
   double ballBallFrictionScale = 1.0,
+  double ballBallRestitution = _eBall,
   double timeSec = 0.0,
   double timeStepSec = _dt,
   List<BallBallContact>? contactDetails,
@@ -1262,6 +1303,7 @@ Vec2? _resolveCollisions(
     previousVelocities,
     previousAngularVelocities,
     timeStepSec,
+    ballBallRestitution,
   );
   Vec2? firstContact = hertz.cueContact;
   for (int i = 0; i < balls.length; i++) {
@@ -1326,7 +1368,8 @@ Vec2? _resolveCollisions(
         // is shared, so both balls initially take half the normal speed. This
         // differs from an isolated ball-ball impact (e=0.93), where the cue
         // ball nearly stops and the object ball takes nearly all of it.
-        final normalRestitution = isInitialFrozenCuePair ? 0.0 : _eBall;
+        final normalRestitution =
+            isInitialFrozenCuePair ? 0.0 : ballBallRestitution;
         final jN = (1 + normalRestitution) * 0.5 * vN;
         a.vel3 -= n3 * jN;
         b.vel3 += n3 * jN;

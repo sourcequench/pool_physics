@@ -82,13 +82,23 @@ PhysicsResult simulate({
   required PhysicsTableConfig tableConfig,
   int shotIndex = 0,
   CushionProfile cushion = CushionProfile.standardPool,
-  double maxTimeSeconds = 10.0,
+  bool forPreview = false,
+  bool forSolver = false,
+  double? maxTimeSeconds,
+  double ballBallFrictionScale = 1.0,
+  double ballBallRestitution = 0.93,
 })
 ```
 
 `simulate` is the single entry point.  It integrates the full shot from
 cue-tip contact through all collisions and rail rebounds until every ball
 stops or pockets.
+
+`forSolver: true` keeps physics and contact/path results but skips animation
+frames and research-only trajectory diagnostics, reducing allocation during
+large candidate searches. `ballBallRestitution` defaults to the calibrated
+baseline (`0.93`) and can be adjusted for controlled comparisons. The value
+must be finite and between 0 and 1.
 
 ### `ShotParams`
 

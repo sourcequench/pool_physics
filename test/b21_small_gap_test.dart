@@ -66,6 +66,10 @@ void main() {
               clothSlidingFriction: 0,
               clothRollingResistance: 0,
             ),
+            // Only the initial collision geometry is under test here. Stop
+            // shortly after impact so later pocket/rail events do not add
+            // unrelated contacts to the diagnostic list.
+            maxTimeSeconds: 0.1,
           );
           final contact = result.ballBallContactDetails.single;
 
