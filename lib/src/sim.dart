@@ -714,7 +714,7 @@ PhysicsResult simulate({
       ghostBallMeters != null ? _metersToRel(ghostBallMeters, cfg) : null;
 
   final cueContactIdx = cueContactStep != null
-      ? (cueContactStep * _dt / _recordEvery).floor().clamp(
+      ? (cueContactStep * dt / recordEvery).floor().clamp(
             0,
             pathPoints[cueBallId]!.length - 1,
           )
