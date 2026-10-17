@@ -72,6 +72,12 @@ class PhysicsTableConfig {
 
   /// Rolling resistance coefficient (cloth). [Dr. Dave TP B.12]
   final double clothRollingResistance;
+  final double ballRadiusM;
+  final bool hasPockets;
+  final double relX0;
+  final double relX1;
+  final double relY0;
+  final double relY1;
 
   const PhysicsTableConfig({
     required this.playW,
@@ -79,6 +85,12 @@ class PhysicsTableConfig {
     this.minimumCueElevationDeg = 3.0,
     this.clothSlidingFriction = 0.20,
     this.clothRollingResistance = 0.010,
+    this.ballRadiusM = 0.028575,
+    this.hasPockets = true,
+    this.relX0 = 7.0 / 114.0,
+    this.relX1 = 1.0 - 7.0 / 114.0,
+    this.relY0 = 7.0 / 64.0,
+    this.relY1 = 1.0 - 7.0 / 64.0,
   });
 
   static const nineFootDiamond = PhysicsTableConfig(playW: 2.540, playH: 1.270);
