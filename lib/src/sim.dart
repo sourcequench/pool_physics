@@ -122,6 +122,13 @@ class _Cfg {
   // TP 3.5's representative side-pocket mouth is 5.0625 in wide. Keep the
   // nominal 5 in mouth as a full width; pocket detection is centered on it.
   double get sidePocketHalfW => sideMouthInches * inchesToMeters / 2;
+  double get sideHoleR => sideHoleRadiusInches * inchesToMeters;
+  double get sideShelf => sideShelfInches * inchesToMeters;
+  double get sideFacingAngle => sideFacingAngleDegrees * math.pi / 180.0;
+  double get sideHoleOffset =>
+      (sideShelfInches + sideHoleRadiusInches) * inchesToMeters;
+  double get sideFacingLength =>
+      pocketCushionDepthInches / math.cos(sideFacingAngle) * inchesToMeters;
   double get sidePocketDepth => 0.030 * W / 2.54;
 
   static _Cfg from(PhysicsTableConfig config) => _Cfg(
@@ -155,12 +162,12 @@ class _CornerFrame {
 }
 
 class _PocketSegment {
-  final _CornerFrame corner;
+  final String pocket;
   final String surface;
   final Vec2 start;
   final Vec2 end;
 
-  const _PocketSegment(this.corner, this.surface, this.start, this.end);
+  const _PocketSegment(this.pocket, this.surface, this.start, this.end);
 }
 
 // ── Coordinate helpers ───────────────────────────────────────────────────────
@@ -363,9 +370,12 @@ class CushionProfile {
     // impact model is calibrated, retain the legacy effective-COR parameter.
     this.airborneRestitution = 0.82,
     // Pocket facings are angled, rounded rubber rather than the straight rail
-    // nose represented by the Mathavan profile; use the empirical effective
-    // pool-cushion range until facing-specific data are available.
-    this.pocketFacingRestitution = 0.82,
+    // nose represented by the Mathavan profile. Diamond and tournament tables
+    // use 3/16 in (4.8 mm) 60 Shore A neoprene facings over the wood sub-rail,
+    // which has higher hysteresis (40–55% rebound resilience, effective COR
+    // ~0.68–0.74) than natural gum cushion rubber (~40–45 Shore A, 65–80%+
+    // resilience) so impacts deaden slightly rather than springing off the wood.
+    this.pocketFacingRestitution = 0.72,
     this.slidingFriction = 0.14,
     this.tableImpactFriction = 0.20,
     this.lowSpeedFriction = 0.14,
@@ -385,6 +395,7 @@ class CushionProfile {
     noseHeightMm: 32.0,
     restitution: 0.98,
     airborneRestitution: 0.85,
+    pocketFacingRestitution: 0.70,
     slidingFriction: 0.145,
     tableImpactFriction: 0.20,
     lowSpeedFriction: 0.065,
@@ -1941,7 +1952,7 @@ List<_PocketSegment> _cornerFacingSegments(_Cfg cfg) {
   for (final corner in _cornerFrames(cfg)) {
     result.add(
       _PocketSegment(
-        corner,
+        corner.name,
         'longRailFacing',
         corner.toWorld(Vec2(leg, 0)),
         corner.toWorld(Vec2(leg - dx, -dy)),
@@ -1949,7 +1960,7 @@ List<_PocketSegment> _cornerFacingSegments(_Cfg cfg) {
     );
     result.add(
       _PocketSegment(
-        corner,
+        corner.name,
         'shortRailFacing',
         corner.toWorld(Vec2(0, leg)),
         corner.toWorld(Vec2(-dy, leg - dx)),
@@ -1957,6 +1968,42 @@ List<_PocketSegment> _cornerFacingSegments(_Cfg cfg) {
     );
   }
   return result;
+}
+
+// Side-pocket facings start at the rounded jaw tips at x = W/2 ± hw on the
+// top/bottom rails and angle inward by sideFacingAngle (13°, i.e. 103° to the
+// adjacent rail nose) across pocketCushionDepthInches into the pocket throat.
+List<_PocketSegment> _sideFacingSegments(_Cfg cfg) {
+  final hw = cfg.sidePocketHalfW;
+  final length = cfg.sideFacingLength;
+  final dx = math.sin(cfg.sideFacingAngle) * length;
+  final dy = math.cos(cfg.sideFacingAngle) * length;
+  return [
+    _PocketSegment(
+      'topSide',
+      'leftFacing',
+      Vec2(cfg.W / 2 - hw, 0),
+      Vec2(cfg.W / 2 - hw + dx, -dy),
+    ),
+    _PocketSegment(
+      'topSide',
+      'rightFacing',
+      Vec2(cfg.W / 2 + hw, 0),
+      Vec2(cfg.W / 2 + hw - dx, -dy),
+    ),
+    _PocketSegment(
+      'bottomSide',
+      'leftFacing',
+      Vec2(cfg.W / 2 - hw, cfg.H),
+      Vec2(cfg.W / 2 - hw + dx, cfg.H + dy),
+    ),
+    _PocketSegment(
+      'bottomSide',
+      'rightFacing',
+      Vec2(cfg.W / 2 + hw, cfg.H),
+      Vec2(cfg.W / 2 + hw - dx, cfg.H + dy),
+    ),
+  ];
 }
 
 // The ball's centre drops as soon as it enters the rendered black hole. The
@@ -1970,6 +2017,15 @@ _CornerFrame? _capturingCorner(Vec2 pos, _Cfg cfg) {
     );
     if ((pos - holeCenter).distance < captureRadius) return corner;
   }
+  return null;
+}
+
+String? _capturingSidePocket(Vec2 pos, _Cfg cfg) {
+  final captureRadius = cfg.sideHoleR;
+  final topHoleCenter = Vec2(cfg.W / 2, -cfg.sideHoleOffset);
+  if ((pos - topHoleCenter).distance < captureRadius) return 'topSide';
+  final bottomHoleCenter = Vec2(cfg.W / 2, cfg.H + cfg.sideHoleOffset);
+  if ((pos - bottomHoleCenter).distance < captureRadius) return 'bottomSide';
   return null;
 }
 
@@ -1997,28 +2053,6 @@ bool _nearSidePocket(Vec2 pos, _Cfg cfg) {
       ((pos.x - cfg.W / 2).abs() < hw && pos.y > cfg.H - d);
 }
 
-// True when the ball's physical edge has cleared the jaw rubber (i.e. it is
-// fully inside the pocket mouth and cannot be rejected by the jaw point).
-// Uses hw - _R so that a ball whose center is within _R of the jaw is NOT
-// considered inside the mouth — the jaw handles it via _resolveJawPoints.
-bool _inSidePocketMouth(Vec2 pos, _Cfg cfg) {
-  final hw = cfg.sidePocketHalfW - cfg.radius;
-  final d = cfg.sidePocketDepth;
-  return ((pos.x - cfg.W / 2).abs() < hw && pos.y < d) ||
-      ((pos.x - cfg.W / 2).abs() < hw && pos.y > cfg.H - d);
-}
-
-// The four rubber nose-tips at the edges of the two side pocket openings.
-List<Vec2> _sideJawPoints(_Cfg cfg) {
-  final hw = cfg.sidePocketHalfW;
-  return [
-    Vec2(cfg.W / 2 - hw, 0),
-    Vec2(cfg.W / 2 + hw, 0),
-    Vec2(cfg.W / 2 - hw, cfg.H),
-    Vec2(cfg.W / 2 + hw, cfg.H),
-  ];
-}
-
 Vec2 _closestPointOnSegment(Vec2 point, Vec2 start, Vec2 end) {
   final segment = end - start;
   final lengthSquared = segment.x * segment.x + segment.y * segment.y;
@@ -2029,9 +2063,9 @@ Vec2 _closestPointOnSegment(Vec2 point, Vec2 start, Vec2 end) {
   return start + segment * t;
 }
 
-// Resolve the rounded side-pocket jaw tips and the full corner-facing segments.
-// A segment naturally includes its jaw endpoint, replacing the old point-only
-// corner model while retaining a rounded collision at the cushion tip.
+// Resolve the full corner-pocket and side-pocket facing segments.
+// Each segment naturally includes its jaw endpoint, retaining a rounded
+// collision at the cushion tip while enforcing the angled neoprene facing.
 int _resolvePocketGeometry(
   List<_Ball> balls,
   _Cfg cfg,
@@ -2090,17 +2124,16 @@ int _resolvePocketGeometry(
     }
   }
 
-  final facings = _cornerFacingSegments(cfg);
+  final facings = [
+    ..._cornerFacingSegments(cfg),
+    ..._sideFacingSegments(cfg),
+  ];
   for (final b in balls) {
     if (!b.active) continue;
     for (final facing in facings) {
       final closest = _closestPointOnSegment(b.pos, facing.start, facing.end);
       final direction = (facing.end - facing.start).normalized;
-      impact(b, closest, facing.corner.name, facing.surface, direction);
-    }
-    for (final jaw in _sideJawPoints(cfg)) {
-      final top = jaw.y < cfg.H / 2;
-      impact(b, jaw, top ? 'topSide' : 'bottomSide', 'jawTip', null);
+      impact(b, closest, facing.pocket, facing.surface, direction);
     }
   }
   for (final b in balls) {
@@ -2114,10 +2147,10 @@ void _checkPockets(List<_Ball> balls, _Cfg cfg) {
   for (final b in balls) {
     if (!b.active) continue;
     if (b.pos3.z > b.radius + 0.002) continue;
-    // Corner pockets: ball must reach the throat (inner zone past the jaws).
-    // Side pockets: ball must clear the jaw mouth (stricter zone).
+    // Both corner and side pockets require the ball's centre to cross the
+    // pocket hole circle past the shelf; the facings can reject it before then.
     if (_capturingCorner(b.pos, cfg) != null ||
-        _inSidePocketMouth(b.pos, cfg)) {
+        _capturingSidePocket(b.pos, cfg) != null) {
       b.active = false;
       b.pocketed = true;
       b.pocketPosition = _pocketCenter(b.pos, cfg);

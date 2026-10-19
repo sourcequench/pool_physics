@@ -2229,4 +2229,180 @@ void main() {
       );
     });
   });
+
+  group('Side pocket facing and capture physics (TP 3.5 / TP 3.7)', () {
+    const tableW = 2.540;
+    const tableH = 1.270;
+    const rx0 = 7 / 114;
+    const rx1 = 1 - rx0;
+    const ry0 = 7 / 64;
+    const ry1 = 1 - ry0;
+    Vec2 rel(Vec2 metres) => Vec2(
+          metres.x / tableW * (rx1 - rx0) + rx0,
+          metres.y / tableH * (ry1 - ry0) + ry0,
+        );
+
+    test(
+      'side-pocket constants and 60 Shore A neoprene facing restitution are calibrated',
+      () {
+        expect(sideMouthInches, closeTo(5.0, 1e-9));
+        expect(sideHoleRadiusInches, closeTo(2.5, 1e-9));
+        expect(sideShelfInches, closeTo(0.1875, 1e-9));
+        expect(sideFacingAngleDegrees, closeTo(13.0, 1e-9));
+        expect(pocketCushionDepthInches, closeTo(2.25, 1e-9));
+
+        const standard = CushionProfile.standardPool;
+        const diamond = CushionProfile.diamondRedLabel;
+        expect(standard.pocketFacingRestitution, closeTo(0.72, 1e-9));
+        expect(diamond.pocketFacingRestitution, closeTo(0.70, 1e-9));
+        expect(
+          standard.pocketFacingRestitution,
+          lessThan(standard.restitution),
+          reason:
+              '60 Shore A neoprene facings over wood sub-rail have higher hysteresis than 40–45 Shore A natural gum cushions',
+        );
+        expect(
+          diamond.pocketFacingRestitution,
+          lessThan(standard.pocketFacingRestitution),
+        );
+      },
+    );
+
+    test('straight-in and moderate-angle shots into side pocket drop cleanly',
+        () {
+      // Straight-in (90° to top rail) into topSide pocket at (W/2, 0).
+      final straightIn = _run(
+        balls: [cue(rel(const Vec2(tableW / 2, 0.35)))],
+        shot: const ShotParams(aimDir: Vec2(0, -1), speedMs: 1.5),
+      );
+      expect(straightIn.endPositions['cue'], isNull);
+      expect(straightIn.pocketPositions['cue'], isNotNull);
+      expect(straightIn.pocketContactDetails, isEmpty);
+
+      // 60° approach angle aimed dead-center at topSide pocket.
+      final angle60 = 60 * math.pi / 180;
+      final start60 = Vec2(
+        tableW / 2 - 0.35 * math.cos(angle60),
+        0.35 * math.sin(angle60),
+      );
+      final moderateAngle = _run(
+        balls: [cue(rel(start60))],
+        shot: ShotParams(
+          aimDir: Vec2(math.cos(angle60), -math.sin(angle60)),
+          speedMs: 1.5,
+        ),
+      );
+      expect(moderateAngle.endPositions['cue'], isNull);
+      expect(moderateAngle.pocketPositions['cue'], isNotNull);
+    });
+
+    test(
+      'shallow-angle shot into side pocket strikes far facing and rattles out',
+      () {
+        // Approach topSide (W/2, 0) at 20° from the top rail, aimed to clear the
+        // near (left) jaw tip and strike the far (right) 13° facing.
+        final alpha = 20 * math.pi / 180;
+        final dir = Vec2(math.cos(alpha), -math.sin(alpha));
+        // Target a point inside the pocket mouth that clears the left jaw tip
+        // (-2.5" = -0.0635 m) and hits the right facing (+0.048 m, -0.008 m).
+        final targetM = Vec2(tableW / 2 + 0.025, 0.0);
+        final startM = targetM - dir * 0.40;
+        final result = _run(
+          balls: [cue(rel(startM))],
+          shot: ShotParams(aimDir: dir, speedMs: 2.0),
+        );
+
+        expect(
+          result.pocketContactDetails.any(
+            (c) =>
+                c.pocket == 'topSide' &&
+                (c.surface == 'rightFacing' || c.surface == 'leftFacing'),
+          ),
+          isTrue,
+          reason:
+              'shallow side-pocket shot must record a PocketContact on the side-pocket facing',
+        );
+        expect(
+          result.endPositions['cue'],
+          isNotNull,
+          reason:
+              'shallow 20° shot hitting the far side-pocket facing must be rejected, not pocketed',
+        );
+        expect(result.pocketPositions['cue'], isNull);
+      },
+    );
+
+    test(
+      'thin object-ball cut into bottom side pocket bobbles off facing instead of dropping',
+      () {
+        // Object ball near the bottom rail cut thinly toward bottomSide (W/2, H)
+        // at ~22° to the bottom rail.
+        final alpha = 22 * math.pi / 180;
+        final obTravelDir = Vec2(math.cos(alpha), math.sin(alpha));
+        final targetPocketMouthM = Vec2(tableW / 2 + 0.024, tableH);
+        final obM = targetPocketMouthM - obTravelDir * 0.30;
+        const ballRadiusM = 0.028575;
+        final ghostM = obM - obTravelDir * (2 * ballRadiusM);
+        // Cue ball approaches at a 40° cut to send OB along obTravelDir.
+        final cutRad = 40 * math.pi / 180;
+        final cueApproachDir = Vec2(
+          obTravelDir.x * math.cos(cutRad) - obTravelDir.y * math.sin(cutRad),
+          obTravelDir.x * math.sin(cutRad) + obTravelDir.y * math.cos(cutRad),
+        );
+        final cbM = ghostM - cueApproachDir * 0.35;
+
+        final result = _run(
+          balls: [cue(rel(cbM)), ball('ob', rel(obM))],
+          shot: ShotParams(aimDir: cueApproachDir, speedMs: 2.2),
+        );
+
+        expect(
+          result.pocketContactDetails.any(
+            (c) => c.ballId == 'ob' && c.pocket == 'bottomSide',
+          ),
+          isTrue,
+          reason: 'OB must contact the bottomSide pocket facing',
+        );
+        expect(
+          result.endPositions['ob'],
+          isNotNull,
+          reason: 'thin side-pocket cut hitting facing must rattle out',
+        );
+        expect(result.pocketPositions['ob'], isNull);
+      },
+    );
+
+    test(
+      'Diamond 60 Shore A neoprene facing restitution deadens rebound compared to higher COR',
+      () {
+        final alpha = 22 * math.pi / 180;
+        final dir = Vec2(math.cos(alpha), -math.sin(alpha));
+        final startM = Vec2(tableW / 2 + 0.024, 0.0) - dir * 0.35;
+
+        final diamondFacing = _run(
+          balls: [cue(rel(startM))],
+          shot: ShotParams(aimDir: dir, speedMs: 2.0),
+          cushion: CushionProfile.diamondRedLabel,
+        );
+        final livelyFacing = _run(
+          balls: [cue(rel(startM))],
+          shot: ShotParams(aimDir: dir, speedMs: 2.0),
+          cushion: const CushionProfile(pocketFacingRestitution: 0.85),
+        );
+
+        final diamondContact = diamondFacing.pocketContactDetails.firstWhere(
+          (c) => c.pocket == 'topSide',
+        );
+        final livelyContact = livelyFacing.pocketContactDetails.firstWhere(
+          (c) => c.pocket == 'topSide',
+        );
+        expect(
+          diamondContact.reboundSpeedMs,
+          lessThan(livelyContact.reboundSpeedMs),
+          reason:
+              'harder 60 Shore A neoprene facings (COR 0.70) absorb more normal impact energy than lively 0.85 rubber',
+        );
+      },
+    );
+  });
 }

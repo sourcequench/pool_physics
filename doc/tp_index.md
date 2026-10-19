@@ -76,6 +76,7 @@ the numerical values used.
 | Rail nose height — standard pool: 36.5 mm | Mathavan Table 1 | Nominal pool-table value |
 | Rail nose height — Diamond Red Label: 34 mm | Measured / Diamond specs | Lower nose characteristic of Diamond tables |
 | Cushion restitution: 0.75 | TP 6.3 / Mathavan | Speed-averaged value for typical felt-covered cushion |
+| Pocket facing restitution: 0.72 (0.70 Diamond) | Diamond specs / TP 3.7 | 3/16″ 60 Shore A neoprene facing over wood sub-rail vs. 40–45 Shore A natural gum cushion |
 | Impact duration (standard pool): 0.45 ms | Mathavan | Used for finite-contact damping weight |
 | Impact duration (Diamond): 0.52 ms | Diamond characterisation | Slightly longer for harder rubber |
 | Running English amplification | Mathavan Fig. 10 | Angle opens with same-direction sidespin |
@@ -89,6 +90,8 @@ the numerical values used.
 | Constant / formula | Source | Notes |
 |---|---|---|
 | Corner pocket facing angle: 38.32° | TP B.15 | Derived from 4.5″ mouth, 3.75″ throat, 2.0″ cushion depth |
+| Side pocket mouth / facing angle: 5.0″ / 13.0° | TP 3.5 / BCA / WPA | 103° cut angle to rail nose across 2.25″ cushion depth |
+| Side pocket shelf / hole radius: 0.1875″ / 2.5″ | TP 3.5 / BCA / Diamond | 3/16″ nominal shelf (0″–3/8″ BCA spec) before 2.5″-radius hole |
 | Nine-foot table play surface: 100″ × 50″ | Diamond Pro-Am specs | `PhysicsTableConfig.nineFootDiamond` |
 | Rail width: 7/114 of table width | Normalized from Diamond specs | Same fraction applies to both short and long rails |
 | Ball diameter: 2.25 in (0.05715 m) | BCA / WPA | Standard pool ball |

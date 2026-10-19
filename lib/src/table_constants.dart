@@ -14,6 +14,8 @@ const double cornerShelfInches = 1.625;
 const double cornerFacingAngleDegrees = 38.323221901499416;
 const double sideMouthInches = 5.0;
 const double sideHoleRadiusInches = 2.5;
+// TP 3.5 / BCA standard side-pocket shelf depth (0"–3/8" range; 3/16" nominal).
+const double sideShelfInches = 0.1875;
 const double sideFacingAngleDegrees = 13.0;
 const double pocketCushionDepthInches = 2.25;
 const double inchesToMeters = 0.0254;
