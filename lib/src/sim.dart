@@ -1037,109 +1037,115 @@ void _applyFriction(
   Map<String, double>? sideSpinRatioAtRoll,
   double dt,
 ) {
+  final subSteps = (dt / _dt).round().clamp(1, 16);
+  final subDt = dt / subSteps;
   for (final b in balls) {
     if (!b.active) continue;
+    for (var step = 0; step < subSteps; step++) {
+      if (!b.isMoving) break;
 
-    final airborne = b.pos3.z > b.radius + 1e-8 || b.vel3.z > 0;
-    if (airborne) {
-      b.vel3 += Vec3(0, 0, -_g * dt);
-    }
+      final airborne = b.pos3.z > b.radius + 1e-8 || b.vel3.z > 0;
+      if (airborne) {
+        b.vel3 += Vec3(0, 0, -_g * subDt);
+      }
 
-    // Dr. Dave's high-speed-video analysis shows that a ball retains its spin
-    // while airborne: cloth friction acts during table contact, not during a
-    // hop. Apply the existing sliding/rolling model only while grounded.
-    if (!airborne) {
-      final vc = b.vel - b.spin;
-      final vcSpeed = vc.distance;
+      // Dr. Dave's high-speed-video analysis shows that a ball retains its spin
+      // while airborne: cloth friction acts during table contact, not during a
+      // hop. Apply the existing sliding/rolling model only while grounded.
+      if (!airborne) {
+        final vc = b.vel - b.spin;
+        final vcSpeed = vc.distance;
 
-      if (vcSpeed > 4e-4) {
-        final vcDir = vc / vcSpeed;
-        final slipAccel = cfg.clothSlidingFriction * _g;
-        final slipStep = 3.5 * slipAccel * dt;
-        if (vcSpeed <= slipStep) {
-          final rolling = b.vel - vcDir * (vcSpeed / 3.5);
-          b.vel = rolling;
-          b.spin = rolling;
-          sideSpinRatioAtRoll?.putIfAbsent(
-            b.id,
-            () => b.vel.distance > 1e-9
-                ? b.spinZ.abs() * b.radius / b.vel.distance
-                : 0.0,
-          );
-        } else {
-          b.vel = b.vel - vcDir * (slipAccel * dt);
-          b.spin = b.spin + vcDir * (2.5 * slipAccel * dt);
-        }
-      } else {
-        final speed = b.vel.distance;
-        if (speed > 4e-4) {
-          // Dr. Dave TP B.2: the off-centre normal force that produces
-          // rolling resistance also creates a small lateral force when the
-          // ball has sidespin. Integrate its turn rate only in the rolling
-          // regime; sliding and airborne motion use their own contact laws.
-          // Solve TP B.2's force-balance relation:
-          // sin(theta) - muR*cos(theta) = (2/5)*muR.
-          final turnNormalAngle = math.atan(cfg.clothRollingResistance) +
-              math.asin(
-                (2.0 / 5.0) *
-                    cfg.clothRollingResistance /
-                    math.sqrt(
-                      1.0 +
-                          cfg.clothRollingResistance *
-                              cfg.clothRollingResistance,
-                    ),
-              );
-          final turnRate = (2.0 / 5.0) *
-              b.radius *
-              spinZDecayRateRadPerSec2 *
-              math.sin(turnNormalAngle) /
-              (speed * (2.0 / 5.0 + math.cos(turnNormalAngle)));
-          final spinDuration = b.spinZ.abs() > 0.02
-              ? math.min(dt, b.spinZ.abs() / spinZDecayRateRadPerSec2)
-              : 0.0;
-          final turnAngle = -b.spinZ.sign * turnRate * spinDuration;
-          final cosTurn = math.cos(turnAngle);
-          final sinTurn = math.sin(turnAngle);
-          final turnedVelocity = Vec2(
-            b.vel.x * cosTurn - b.vel.y * sinTurn,
-            b.vel.x * sinTurn + b.vel.y * cosTurn,
-          );
-          final rollingDecel = cfg.clothRollingResistance * _g * dt;
-          if (speed <= rollingDecel) {
-            b.vel = Vec2.zero;
-            b.spin = Vec2.zero;
+        if (vcSpeed > 4e-4) {
+          final vcDir = vc / vcSpeed;
+          final slipAccel = cfg.clothSlidingFriction * _g;
+          final slipStep = 3.5 * slipAccel * subDt;
+          if (vcSpeed <= slipStep) {
+            final rolling = b.vel - vcDir * (vcSpeed / 3.5);
+            b.vel = rolling;
+            b.spin = rolling;
+            sideSpinRatioAtRoll?.putIfAbsent(
+              b.id,
+              () => b.vel.distance > 1e-9
+                  ? b.spinZ.abs() * b.radius / b.vel.distance
+                  : 0.0,
+            );
           } else {
-            b.vel = turnedVelocity - turnedVelocity.normalized * rollingDecel;
-            b.spin = b.vel;
+            b.vel = b.vel - vcDir * (slipAccel * subDt);
+            b.spin = b.spin + vcDir * (2.5 * slipAccel * subDt);
           }
         } else {
+          final speed = b.vel.distance;
+          if (speed > 4e-4) {
+            // Dr. Dave TP B.2: the off-centre normal force that produces
+            // rolling resistance also creates a small lateral force when the
+            // ball has sidespin. Integrate its turn rate only in the rolling
+            // regime; sliding and airborne motion use their own contact laws.
+            // Solve TP B.2's force-balance relation:
+            // sin(theta) - muR*cos(theta) = (2/5)*muR.
+            final turnNormalAngle = math.atan(cfg.clothRollingResistance) +
+                math.asin(
+                  (2.0 / 5.0) *
+                      cfg.clothRollingResistance /
+                      math.sqrt(
+                        1.0 +
+                            cfg.clothRollingResistance *
+                                cfg.clothRollingResistance,
+                      ),
+                );
+            final turnRate = (2.0 / 5.0) *
+                b.radius *
+                spinZDecayRateRadPerSec2 *
+                math.sin(turnNormalAngle) /
+                (speed * (2.0 / 5.0 + math.cos(turnNormalAngle)));
+            final spinDuration = b.spinZ.abs() > 0.02
+                ? math.min(subDt, b.spinZ.abs() / spinZDecayRateRadPerSec2)
+                : 0.0;
+            final turnAngle = -b.spinZ.sign * turnRate * spinDuration;
+            final cosTurn = math.cos(turnAngle);
+            final sinTurn = math.sin(turnAngle);
+            final turnedVelocity = Vec2(
+              b.vel.x * cosTurn - b.vel.y * sinTurn,
+              b.vel.x * sinTurn + b.vel.y * cosTurn,
+            );
+            final rollingDecel = cfg.clothRollingResistance * _g * subDt;
+            if (speed <= rollingDecel) {
+              b.vel = Vec2.zero;
+              b.spin = Vec2.zero;
+            } else {
+              b.vel = turnedVelocity - turnedVelocity.normalized * rollingDecel;
+              b.spin = b.vel;
+            }
+          } else {
+            b.vel = Vec2.zero;
+            b.spin = Vec2.zero;
+          }
+        }
+
+        if (b.spinZ.abs() > 0.02) {
+          final decay = spinZDecayRateRadPerSec2 * subDt;
+          b.spinZ =
+              b.spinZ.abs() <= decay ? 0.0 : b.spinZ - decay * b.spinZ.sign;
+        } else {
+          b.spinZ = 0.0;
+        }
+
+        if (b.vel.distance < 3e-4 &&
+            b.spin.distance < 3e-4 &&
+            b.spinZ.abs() < 0.02) {
           b.vel = Vec2.zero;
           b.spin = Vec2.zero;
+          b.spinZ = 0.0;
         }
       }
 
-      if (b.spinZ.abs() > 0.02) {
-        final decay = spinZDecayRateRadPerSec2 * dt;
-        b.spinZ = b.spinZ.abs() <= decay ? 0.0 : b.spinZ - decay * b.spinZ.sign;
-      } else {
-        b.spinZ = 0.0;
-      }
-
-      if (b.vel.distance < 3e-4 &&
-          b.spin.distance < 3e-4 &&
-          b.spinZ.abs() < 0.02) {
-        b.vel = Vec2.zero;
-        b.spin = Vec2.zero;
-        b.spinZ = 0.0;
-      }
-    }
-
-    b.pos3 += b.vel3 * dt;
-    if (b.pos3.z < b.radius) {
-      b.pos3 = Vec3(b.pos3.x, b.pos3.y, b.radius);
-      if (b.vel3.z < 0) {
-        _resolveTableLanding(b, cfg.clothSlidingFriction);
-        tableBounceCounts[b.id] = (tableBounceCounts[b.id] ?? 0) + 1;
+      b.pos3 += b.vel3 * subDt;
+      if (b.pos3.z < b.radius) {
+        b.pos3 = Vec3(b.pos3.x, b.pos3.y, b.radius);
+        if (b.vel3.z < 0) {
+          _resolveTableLanding(b, cfg.clothSlidingFriction);
+          tableBounceCounts[b.id] = (tableBounceCounts[b.id] ?? 0) + 1;
+        }
       }
     }
   }
