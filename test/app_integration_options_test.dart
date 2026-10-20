@@ -91,4 +91,49 @@ void main() {
       );
     }
   });
+
+  test(
+    'forPreview integrates friction at 3 ms steps until rest and matches 1 ms end positions on long shots',
+    () {
+      const rack = <PhysicsBall>[
+        PhysicsBall(id: 'cue', x: 0.8872, y: 0.4622),
+        PhysicsBall(id: 'ball-1', x: 0.1634, y: 0.2118),
+        PhysicsBall(id: 'ball-2', x: 0.1825, y: 0.3250),
+        PhysicsBall(id: 'ball-3', x: 0.2976, y: 0.6783),
+      ];
+      const longShot = ShotParams(
+        aimDir: Vec2(-0.9833, -0.1821),
+        speedMs: 3.3528,
+        hitX: 0,
+        hitY: 0,
+      );
+
+      final normal = simulate(
+        balls: rack,
+        cueBallId: 'cue',
+        shot: longShot,
+        tableConfig: table,
+        forPreview: false,
+      );
+      final preview = simulate(
+        balls: rack,
+        cueBallId: 'cue',
+        shot: longShot,
+        tableConfig: table,
+        forPreview: true,
+      );
+
+      expect(preview.pocketPositions.keys, normal.pocketPositions.keys);
+      expect(preview.finalLinearVelocities['cue']!.length, lessThan(1e-3));
+      final normalCueEnd = normal.endPositions['cue']!;
+      final previewCueEnd = preview.endPositions['cue']!;
+      expect((previewCueEnd - normalCueEnd).distance, lessThan(0.02));
+      expect(
+        (preview.ballBallContactDetails.first.timeSec -
+                normal.ballBallContactDetails.first.timeSec)
+            .abs(),
+        lessThan(0.01),
+      );
+    },
+  );
 }

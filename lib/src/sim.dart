@@ -528,7 +528,7 @@ PhysicsResult simulate({
   }
   final dt = forPreview ? 0.003 : _dt;
   final recordEvery = forPreview ? 0.040 : _recordEvery;
-  final maxTime = maxTimeSeconds ?? (forPreview ? 6.0 : _maxTime);
+  final maxTime = maxTimeSeconds ?? _maxTime;
   final cfg = _Cfg.from(tableConfig);
 
   final simBalls = balls
@@ -625,6 +625,7 @@ PhysicsResult simulate({
       tableBounceCounts,
       cfg,
       forSolver ? null : sideSpinRatioAtRoll,
+      dt,
     );
     final hitInfo = _resolveCollisions(
       simBalls,
@@ -1034,13 +1035,14 @@ void _applyFriction(
   Map<String, int> tableBounceCounts,
   _Cfg cfg,
   Map<String, double>? sideSpinRatioAtRoll,
+  double dt,
 ) {
   for (final b in balls) {
     if (!b.active) continue;
 
     final airborne = b.pos3.z > b.radius + 1e-8 || b.vel3.z > 0;
     if (airborne) {
-      b.vel3 += const Vec3(0, 0, -_g * _dt);
+      b.vel3 += Vec3(0, 0, -_g * dt);
     }
 
     // Dr. Dave's high-speed-video analysis shows that a ball retains its spin
@@ -1053,7 +1055,7 @@ void _applyFriction(
       if (vcSpeed > 4e-4) {
         final vcDir = vc / vcSpeed;
         final slipAccel = cfg.clothSlidingFriction * _g;
-        final slipStep = 3.5 * slipAccel * _dt;
+        final slipStep = 3.5 * slipAccel * dt;
         if (vcSpeed <= slipStep) {
           final rolling = b.vel - vcDir * (vcSpeed / 3.5);
           b.vel = rolling;
@@ -1065,8 +1067,8 @@ void _applyFriction(
                 : 0.0,
           );
         } else {
-          b.vel = b.vel - vcDir * (slipAccel * _dt);
-          b.spin = b.spin + vcDir * (2.5 * slipAccel * _dt);
+          b.vel = b.vel - vcDir * (slipAccel * dt);
+          b.spin = b.spin + vcDir * (2.5 * slipAccel * dt);
         }
       } else {
         final speed = b.vel.distance;
@@ -1093,7 +1095,7 @@ void _applyFriction(
               math.sin(turnNormalAngle) /
               (speed * (2.0 / 5.0 + math.cos(turnNormalAngle)));
           final spinDuration = b.spinZ.abs() > 0.02
-              ? math.min(_dt, b.spinZ.abs() / spinZDecayRateRadPerSec2)
+              ? math.min(dt, b.spinZ.abs() / spinZDecayRateRadPerSec2)
               : 0.0;
           final turnAngle = -b.spinZ.sign * turnRate * spinDuration;
           final cosTurn = math.cos(turnAngle);
@@ -1102,10 +1104,14 @@ void _applyFriction(
             b.vel.x * cosTurn - b.vel.y * sinTurn,
             b.vel.x * sinTurn + b.vel.y * cosTurn,
           );
-          b.spin = turnedVelocity;
-          b.vel = turnedVelocity -
-              turnedVelocity.normalized *
-                  (cfg.clothRollingResistance * _g * _dt);
+          final rollingDecel = cfg.clothRollingResistance * _g * dt;
+          if (speed <= rollingDecel) {
+            b.vel = Vec2.zero;
+            b.spin = Vec2.zero;
+          } else {
+            b.vel = turnedVelocity - turnedVelocity.normalized * rollingDecel;
+            b.spin = b.vel;
+          }
         } else {
           b.vel = Vec2.zero;
           b.spin = Vec2.zero;
@@ -1113,7 +1119,7 @@ void _applyFriction(
       }
 
       if (b.spinZ.abs() > 0.02) {
-        final decay = spinZDecayRateRadPerSec2 * _dt;
+        final decay = spinZDecayRateRadPerSec2 * dt;
         b.spinZ = b.spinZ.abs() <= decay ? 0.0 : b.spinZ - decay * b.spinZ.sign;
       } else {
         b.spinZ = 0.0;
@@ -1128,7 +1134,7 @@ void _applyFriction(
       }
     }
 
-    b.pos3 += b.vel3 * _dt;
+    b.pos3 += b.vel3 * dt;
     if (b.pos3.z < b.radius) {
       b.pos3 = Vec3(b.pos3.x, b.pos3.y, b.radius);
       if (b.vel3.z < 0) {
