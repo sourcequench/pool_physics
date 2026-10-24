@@ -662,6 +662,7 @@ void main() {
           clothRollingResistance: 0,
         ),
         ballBallFrictionScale: frictionScale,
+        maxTimeSeconds: 0.1,
       );
       expect(result.ballBallContactDetails, isNotEmpty);
       return result.ballBallContactDetails.first;
@@ -759,6 +760,7 @@ void main() {
           playH: _tableH,
           minimumCueElevationDeg: 0,
         ),
+        maxTimeSeconds: 0.1,
       );
       expect(result.ballBallContactDetails, isNotEmpty);
       return result.ballBallContactDetails.first.throwAngleRad;
@@ -855,6 +857,7 @@ void main() {
           playH: _tableH,
           minimumCueElevationDeg: 0,
         ),
+        maxTimeSeconds: 0.1,
       );
       expect(result.ballBallContactDetails, isNotEmpty);
       return result.ballBallContactDetails.first.throwAngleRad;
