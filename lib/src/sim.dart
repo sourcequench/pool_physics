@@ -77,73 +77,208 @@ class _Cfg {
   final double relY0;
   final double relY1;
 
-  const _Cfg(
-    this.W,
-    this.H,
-    this.minimumCueElevationDeg,
-    this.clothSlidingFriction,
-    this.clothRollingResistance,
-    this.radius,
-    this.hasPockets,
-    this.relX0,
-    this.relX1,
-    this.relY0,
-    this.relY1,
-  );
+  final double cornerJawR;
+  final double cornerHoleR;
+  final double cornerShelf;
+  final double cornerFacingAngle;
+  final double cornerHoleOffset;
+  final double cornerFacingLength;
+  final double cornerPocketDetectR;
+  final double sidePocketHalfW;
+  final double sideHoleR;
+  final double sideShelf;
+  final double sideFacingAngle;
+  final double sideHoleOffset;
+  final double sideFacingLength;
+  final double sidePocketDepth;
+  final double pocketCheckMargin;
+  final double rollingTurnFactor;
+  final List<_CornerFrame> cornerFrames;
+  final List<_PocketSegment> pocketFacings;
 
-  double get cornerJawR => cornerMouthInches / math.sqrt2 * inchesToMeters;
-  double get cornerHoleR => cornerHoleRadiusInches * inchesToMeters;
-  double get cornerShelf => cornerShelfInches * inchesToMeters;
-  double get cornerFacingAngle => cornerFacingAngleDegrees * math.pi / 180.0;
-  double get cornerHoleOffset {
-    final offsetInches =
-        (cornerShelfInches + cornerHoleRadiusInches - cornerMouthInches / 2) /
-            math.sqrt2;
-    return offsetInches * inchesToMeters;
-  }
+  _Cfg._({
+    required this.W,
+    required this.H,
+    required this.minimumCueElevationDeg,
+    required this.clothSlidingFriction,
+    required this.clothRollingResistance,
+    required this.radius,
+    required this.hasPockets,
+    required this.relX0,
+    required this.relX1,
+    required this.relY0,
+    required this.relY1,
+    required this.cornerJawR,
+    required this.cornerHoleR,
+    required this.cornerShelf,
+    required this.cornerFacingAngle,
+    required this.cornerHoleOffset,
+    required this.cornerFacingLength,
+    required this.cornerPocketDetectR,
+    required this.sidePocketHalfW,
+    required this.sideHoleR,
+    required this.sideShelf,
+    required this.sideFacingAngle,
+    required this.sideHoleOffset,
+    required this.sideFacingLength,
+    required this.sidePocketDepth,
+    required this.pocketCheckMargin,
+    required this.rollingTurnFactor,
+    required this.cornerFrames,
+    required this.pocketFacings,
+  });
 
-  double get cornerFacingLength {
-    final offset = cornerHoleOffset;
-    final leg = cornerJawR;
-    final cosA = math.cos(cornerFacingAngle);
-    final sinA = math.sin(cornerFacingAngle);
-    final projection = (leg + offset) * cosA + offset * sinA;
-    final distanceSquared = (leg + offset) * (leg + offset) + offset * offset;
-    return projection -
-        math.sqrt(
-          projection * projection -
-              (distanceSquared - cornerHoleR * cornerHoleR),
-        );
-  }
+  static _Cfg from(PhysicsTableConfig config) {
+    final w = config.playW;
+    final h = config.playH;
+    final r = config.ballRadiusM;
+    final cJawR = cornerMouthInches / math.sqrt2 * inchesToMeters;
+    final cHoleR = cornerHoleRadiusInches * inchesToMeters;
+    final cShelf = cornerShelfInches * inchesToMeters;
+    final cFacingAngle = cornerFacingAngleDegrees * math.pi / 180.0;
+    final cHoleOffset =
+        ((cornerShelfInches + cornerHoleRadiusInches - cornerMouthInches / 2) /
+                math.sqrt2) *
+            inchesToMeters;
+    final cosCA = math.cos(cFacingAngle);
+    final sinCA = math.sin(cFacingAngle);
+    final proj = (cJawR + cHoleOffset) * cosCA + cHoleOffset * sinCA;
+    final distSq = (cJawR + cHoleOffset) * (cJawR + cHoleOffset) +
+        cHoleOffset * cHoleOffset;
+    final cFacingLen =
+        proj - math.sqrt(proj * proj - (distSq - cHoleR * cHoleR));
+    final cDetectR = cJawR + r * 1.2;
 
-  // The rail nose is suppressed only where the rounded jaw/facing geometry
-  // takes over. This includes one ball radius beyond the mouth tip.
-  double get cornerPocketDetectR => cornerJawR + radius * 1.2;
-  // TP 3.5's representative side-pocket mouth is 5.0625 in wide. Keep the
-  // nominal 5 in mouth as a full width; pocket detection is centered on it.
-  double get sidePocketHalfW => sideMouthInches * inchesToMeters / 2;
-  double get sideHoleR => sideHoleRadiusInches * inchesToMeters;
-  double get sideShelf => sideShelfInches * inchesToMeters;
-  double get sideFacingAngle => sideFacingAngleDegrees * math.pi / 180.0;
-  double get sideHoleOffset =>
-      (sideShelfInches + sideHoleRadiusInches) * inchesToMeters;
-  double get sideFacingLength =>
-      pocketCushionDepthInches / math.cos(sideFacingAngle) * inchesToMeters;
-  double get sidePocketDepth => 0.030 * W / 2.54;
+    final sHalfW = sideMouthInches * inchesToMeters / 2;
+    final sHoleR = sideHoleRadiusInches * inchesToMeters;
+    final sShelf = sideShelfInches * inchesToMeters;
+    final sFacingAngle = sideFacingAngleDegrees * math.pi / 180.0;
+    final sHoleOffset =
+        (sideShelfInches + sideHoleRadiusInches) * inchesToMeters;
+    final sFacingLen =
+        pocketCushionDepthInches / math.cos(sFacingAngle) * inchesToMeters;
+    final sDepth = 0.030 * w / 2.54;
+    final margin = math.max(cJawR + cHoleR, sDepth + sHoleR) + r * 1.5;
 
-  static _Cfg from(PhysicsTableConfig config) => _Cfg(
-        config.playW,
-        config.playH,
-        config.minimumCueElevationDeg,
-        config.clothSlidingFriction,
-        config.clothRollingResistance,
-        config.ballRadiusM,
-        config.hasPockets,
-        config.relX0,
-        config.relX1,
-        config.relY0,
-        config.relY1,
+    final muR = config.clothRollingResistance;
+    final turnNormalAngle = math.atan(muR) +
+        math.asin((2.0 / 5.0) * muR / math.sqrt(1.0 + muR * muR));
+    final turnFactor =
+        math.sin(turnNormalAngle) / (2.0 / 5.0 + math.cos(turnNormalAngle));
+
+    final frames = <_CornerFrame>[
+      _CornerFrame(
+        'topLeft',
+        Vec2.zero,
+        1,
+        1,
+        Vec2(-cHoleOffset, -cHoleOffset),
+      ),
+      _CornerFrame(
+        'topRight',
+        Vec2(w, 0),
+        -1,
+        1,
+        Vec2(w + cHoleOffset, -cHoleOffset),
+      ),
+      _CornerFrame(
+        'bottomLeft',
+        Vec2(0, h),
+        1,
+        -1,
+        Vec2(-cHoleOffset, h + cHoleOffset),
+      ),
+      _CornerFrame(
+        'bottomRight',
+        Vec2(w, h),
+        -1,
+        -1,
+        Vec2(w + cHoleOffset, h + cHoleOffset),
+      ),
+    ];
+
+    final facings = <_PocketSegment>[];
+    final cdx = cosCA * cFacingLen;
+    final cdy = sinCA * cFacingLen;
+    for (final corner in frames) {
+      facings.add(
+        _PocketSegment(
+          corner.name,
+          'longRailFacing',
+          corner.toWorld(Vec2(cJawR, 0)),
+          corner.toWorld(Vec2(cJawR - cdx, -cdy)),
+        ),
       );
+      facings.add(
+        _PocketSegment(
+          corner.name,
+          'shortRailFacing',
+          corner.toWorld(Vec2(0, cJawR)),
+          corner.toWorld(Vec2(-cdy, cJawR - cdx)),
+        ),
+      );
+    }
+    final sdx = math.sin(sFacingAngle) * sFacingLen;
+    final sdy = math.cos(sFacingAngle) * sFacingLen;
+    facings.addAll([
+      _PocketSegment(
+        'topSide',
+        'leftFacing',
+        Vec2(w / 2 - sHalfW, 0),
+        Vec2(w / 2 - sHalfW + sdx, -sdy),
+      ),
+      _PocketSegment(
+        'topSide',
+        'rightFacing',
+        Vec2(w / 2 + sHalfW, 0),
+        Vec2(w / 2 + sHalfW - sdx, -sdy),
+      ),
+      _PocketSegment(
+        'bottomSide',
+        'leftFacing',
+        Vec2(w / 2 - sHalfW, h),
+        Vec2(w / 2 - sHalfW + sdx, h + sdy),
+      ),
+      _PocketSegment(
+        'bottomSide',
+        'rightFacing',
+        Vec2(w / 2 + sHalfW, h),
+        Vec2(w / 2 + sHalfW - sdx, h + sdy),
+      ),
+    ]);
+
+    return _Cfg._(
+      W: w,
+      H: h,
+      minimumCueElevationDeg: config.minimumCueElevationDeg,
+      clothSlidingFriction: config.clothSlidingFriction,
+      clothRollingResistance: muR,
+      radius: r,
+      hasPockets: config.hasPockets,
+      relX0: config.relX0,
+      relX1: config.relX1,
+      relY0: config.relY0,
+      relY1: config.relY1,
+      cornerJawR: cJawR,
+      cornerHoleR: cHoleR,
+      cornerShelf: cShelf,
+      cornerFacingAngle: cFacingAngle,
+      cornerHoleOffset: cHoleOffset,
+      cornerFacingLength: cFacingLen,
+      cornerPocketDetectR: cDetectR,
+      sidePocketHalfW: sHalfW,
+      sideHoleR: sHoleR,
+      sideShelf: sShelf,
+      sideFacingAngle: sFacingAngle,
+      sideHoleOffset: sHoleOffset,
+      sideFacingLength: sFacingLen,
+      sidePocketDepth: sDepth,
+      pocketCheckMargin: margin,
+      rollingTurnFactor: turnFactor,
+      cornerFrames: frames,
+      pocketFacings: facings,
+    );
+  }
 }
 
 class _CornerFrame {
@@ -151,8 +286,15 @@ class _CornerFrame {
   final Vec2 origin;
   final double xInward;
   final double yInward;
+  final Vec2 holeCenter;
 
-  const _CornerFrame(this.name, this.origin, this.xInward, this.yInward);
+  const _CornerFrame(
+    this.name,
+    this.origin,
+    this.xInward,
+    this.yInward, [
+    this.holeCenter = Vec2.zero,
+  ]);
 
   Vec2 toWorld(Vec2 local) =>
       Vec2(origin.x + xInward * local.x, origin.y + yInward * local.y);
@@ -166,8 +308,18 @@ class _PocketSegment {
   final String surface;
   final Vec2 start;
   final Vec2 end;
+  final Vec2 direction;
+  final double minX;
+  final double maxX;
+  final double minY;
+  final double maxY;
 
-  const _PocketSegment(this.pocket, this.surface, this.start, this.end);
+  _PocketSegment(this.pocket, this.surface, this.start, this.end)
+      : direction = (end - start).normalized,
+        minX = math.min(start.x, end.x),
+        maxX = math.max(start.x, end.x),
+        minY = math.min(start.y, end.y),
+        maxY = math.max(start.y, end.y);
 }
 
 // ── Coordinate helpers ───────────────────────────────────────────────────────
@@ -442,10 +594,16 @@ class _Ball {
   Vec3 pos3;
   Vec3 vel3;
   Vec3 angularVelocity;
+  Vec3 prevPos3;
+  Vec3 prevVel3;
+  Vec3 prevAngularVelocity;
+  int prevBounceCount = 0;
+  bool hadContactThisStep = false;
   bool active;
   bool pocketed;
   Vec2? pocketPosition;
-  Set<String> activePocketSurfaces = <String>{};
+  Set<String> activePocketSurfaces = const <String>{};
+  final List<Vec2> pathPoints = <Vec2>[];
 
   final double radius;
 
@@ -453,6 +611,9 @@ class _Ball {
       : pos3 = Vec3(pos.x, pos.y, radius),
         vel3 = Vec3.zero,
         angularVelocity = Vec3.zero,
+        prevPos3 = Vec3(pos.x, pos.y, radius),
+        prevVel3 = Vec3.zero,
+        prevAngularVelocity = Vec3.zero,
         active = !pocketed;
 
   Vec2 get pos => Vec2(pos3.x, pos3.y);
@@ -478,7 +639,8 @@ class _Ball {
       angularVelocity = Vec3(angularVelocity.x, angularVelocity.y, value);
 
   bool get isMoving =>
-      active && (vel3.length > 4e-4 || angularVelocity.length > 0.02);
+      active &&
+      (vel3.lengthSquared > 1.6e-7 || angularVelocity.lengthSquared > 4e-4);
 }
 
 // ── Simulation ───────────────────────────────────────────────────────────────
@@ -557,7 +719,8 @@ PhysicsResult simulate({
 
   final pathPoints = <String, List<Vec2>>{};
   for (final b in simBalls) {
-    pathPoints[b.id] = [_metersToRel(b.pos, cfg)];
+    b.pathPoints.add(_metersToRel(b.pos, cfg));
+    pathPoints[b.id] = b.pathPoints;
   }
   // Animation frames: all non-pocketed balls at each _recordEvery timestep.
   final frames = <Map<String, Vec2>>[];
@@ -608,18 +771,15 @@ PhysicsResult simulate({
     t += dt;
     step++;
 
-    final previousPositions = <String, Vec3>{
-      for (final b in simBalls) b.id: b.pos3,
-    };
-    final previousVelocities = <String, Vec3>{
-      for (final b in simBalls) b.id: b.vel3,
-    };
-    final previousAngularVelocities = <String, Vec3>{
-      for (final b in simBalls) b.id: b.angularVelocity,
-    };
-    final previousBounceCounts = forSolver
-        ? const <String, int>{}
-        : Map<String, int>.of(tableBounceCounts);
+    for (var i = 0; i < simBalls.length; i++) {
+      final b = simBalls[i];
+      b.prevPos3 = b.pos3;
+      b.prevVel3 = b.vel3;
+      b.prevAngularVelocity = b.angularVelocity;
+      if (!forSolver) {
+        b.prevBounceCount = tableBounceCounts[b.id]!;
+      }
+    }
     _applyFriction(
       simBalls,
       tableBounceCounts,
@@ -631,9 +791,6 @@ PhysicsResult simulate({
       simBalls,
       cueBallId,
       cfg,
-      previousPositions: previousPositions,
-      previousVelocities: previousVelocities,
-      previousAngularVelocities: previousAngularVelocities,
       ballBallFrictionScale: ballBallFrictionScale,
       ballBallRestitution: ballBallRestitution,
       timeSec: t,
@@ -646,12 +803,12 @@ PhysicsResult simulate({
     }
     if (!forSolver) {
       for (final b in simBalls) {
-        final previous = previousPositions[b.id]!;
+        final previous = b.prevPos3;
         final dx = b.pos3.x - previous.x;
         final dy = b.pos3.y - previous.y;
         horizontalDistanceMeters[b.id] =
             horizontalDistanceMeters[b.id]! + math.sqrt(dx * dx + dy * dy);
-        if (tableBounceCounts[b.id]! > previousBounceCounts[b.id]!) {
+        if (tableBounceCounts[b.id]! > b.prevBounceCount) {
           tableBounceDistancesMeters[b.id]!.add(
             horizontalDistanceMeters[b.id]!,
           );
@@ -662,46 +819,45 @@ PhysicsResult simulate({
         }
       }
     }
-    final cushionContactIds = <String>{};
-    cushionContacts += _resolveCushions(
+    final stepCushionContacts = _resolveCushions(
       simBalls,
       cfg,
       cushion,
-      contactIds: cushionContactIds,
       contactDetails: cushionContactDetails,
       timeSec: t,
     );
+    cushionContacts += stepCushionContacts;
     for (final b in simBalls) {
       _limitAngularSpeed(b);
-    }
-    for (final id in cushionContactIds) {
-      final ball = simBalls.firstWhere((value) => value.id == id);
-      final point = _metersToRel(ball.pos, cfg);
-      final points = pathPoints[id]!;
-      if (points.isEmpty || (points.last - point).distance > 1e-7) {
-        points.add(point);
+      if (b.hadContactThisStep) {
+        b.hadContactThisStep = false;
+        final point = _metersToRel(b.pos, cfg);
+        final points = b.pathPoints;
+        if (points.isEmpty || (points.last - point).distance > 1e-7) {
+          points.add(point);
+        }
       }
     }
-    final pocketContactIds = <String>{};
     if (cfg.hasPockets) {
-      _resolvePocketGeometry(
+      final stepPocketContacts = _resolvePocketGeometry(
         simBalls,
         cfg,
         cushion,
-        contactIds: pocketContactIds,
         contactDetails: pocketContactDetails,
         timeSec: t,
       );
-    }
-    for (final id in pocketContactIds) {
-      final ball = simBalls.firstWhere((value) => value.id == id);
-      final point = _metersToRel(ball.pos, cfg);
-      final points = pathPoints[id]!;
-      if (points.isEmpty || (points.last - point).distance > 1e-7) {
-        points.add(point);
+      if (stepPocketContacts > 0) {
+        for (final b in simBalls) {
+          if (b.hadContactThisStep) {
+            b.hadContactThisStep = false;
+            final point = _metersToRel(b.pos, cfg);
+            final points = b.pathPoints;
+            if (points.isEmpty || (points.last - point).distance > 1e-7) {
+              points.add(point);
+            }
+          }
+        }
       }
-    }
-    if (cfg.hasPockets) {
       _checkPockets(simBalls, cfg);
     }
     if (!forSolver) {
@@ -722,7 +878,7 @@ PhysicsResult simulate({
     if (t >= nextRecord) {
       nextRecord += recordEvery;
       for (final b in simBalls) {
-        if (b.isMoving) pathPoints[b.id]!.add(_metersToRel(b.pos, cfg));
+        if (b.isMoving) b.pathPoints.add(_metersToRel(b.pos, cfg));
       }
       if (!forSolver) {
         frames.add({
@@ -732,7 +888,14 @@ PhysicsResult simulate({
       }
     }
 
-    if (simBalls.every((b) => !b.isMoving)) break;
+    var anyMoving = false;
+    for (var i = 0; i < simBalls.length; i++) {
+      if (simBalls[i].isMoving) {
+        anyMoving = true;
+        break;
+      }
+    }
+    if (!anyMoving) break;
   }
 
   // Preserve terminal state in the replay. A ball can be pocketed between
@@ -1039,8 +1202,71 @@ void _applyFriction(
 ) {
   final subSteps = (dt / _dt).round().clamp(1, 16);
   final subDt = dt / subSteps;
+  final slipAccel = cfg.clothSlidingFriction * _g;
+  final slipStep = 3.5 * slipAccel * subDt;
+  final rollingDecel = cfg.clothRollingResistance * _g * subDt;
+  final spinZDecay = spinZDecayRateRadPerSec2 * subDt;
   for (final b in balls) {
-    if (!b.active) continue;
+    if (!b.active || !b.isMoving) continue;
+
+    // Exact closed-form integration across subSteps when grounded with no Z-spin
+    // and no regime transition within this dt step.
+    if (subSteps > 1 &&
+        b.pos3.z <= b.radius + 1e-8 &&
+        b.vel3.z == 0.0 &&
+        b.spinZ.abs() <= 0.02) {
+      final vcx = b.vel3.x - b.radius * b.angularVelocity.y;
+      final vcy = b.vel3.y + b.radius * b.angularVelocity.x;
+      final vcSpeedSq = vcx * vcx + vcy * vcy;
+      if (vcSpeedSq <= 1.6e-7) {
+        final speedSq = b.vel3.x * b.vel3.x + b.vel3.y * b.vel3.y;
+        final totalRollingDecel = rollingDecel * subSteps;
+        if (speedSq > (totalRollingDecel + 4e-4) * (totalRollingDecel + 4e-4)) {
+          final speed = math.sqrt(speedSq);
+          final posScale =
+              (speed - 0.5 * (subSteps + 1) * rollingDecel) / speed * dt;
+          final velScale = (speed - totalRollingDecel) / speed;
+          b.pos3 = Vec3(
+            b.pos3.x + b.vel3.x * posScale,
+            b.pos3.y + b.vel3.y * posScale,
+            b.radius,
+          );
+          final nextVel = Vec2(b.vel3.x * velScale, b.vel3.y * velScale);
+          b.vel = nextVel;
+          b.spin = nextVel;
+          b.spinZ = 0.0;
+          continue;
+        }
+      } else {
+        final totalSlipStep = slipStep * subSteps;
+        if (vcSpeedSq > totalSlipStep * totalSlipStep) {
+          final vcSpeed = math.sqrt(vcSpeedSq);
+          final invVc = 1.0 / vcSpeed;
+          final vcDirX = vcx * invVc;
+          final vcDirY = vcy * invVc;
+          final posSlip =
+              0.5 * subSteps * (subSteps + 1) * slipAccel * subDt * subDt;
+          final velSlip = slipAccel * dt;
+          final spinSlip = 2.5 * velSlip;
+          final oldVx = b.vel3.x;
+          final oldVy = b.vel3.y;
+          final oldSpin = b.spin;
+          b.pos3 = Vec3(
+            b.pos3.x + oldVx * dt - vcDirX * posSlip,
+            b.pos3.y + oldVy * dt - vcDirY * posSlip,
+            b.radius,
+          );
+          b.vel = Vec2(oldVx - vcDirX * velSlip, oldVy - vcDirY * velSlip);
+          b.spin = Vec2(
+            oldSpin.x + vcDirX * spinSlip,
+            oldSpin.y + vcDirY * spinSlip,
+          );
+          b.spinZ = 0.0;
+          continue;
+        }
+      }
+    }
+
     for (var step = 0; step < subSteps; step++) {
       if (!b.isMoving) break;
 
@@ -1054,12 +1280,11 @@ void _applyFriction(
       // hop. Apply the existing sliding/rolling model only while grounded.
       if (!airborne) {
         final vc = b.vel - b.spin;
-        final vcSpeed = vc.distance;
+        final vcSpeedSq = vc.x * vc.x + vc.y * vc.y;
 
-        if (vcSpeed > 4e-4) {
+        if (vcSpeedSq > 1.6e-7) {
+          final vcSpeed = math.sqrt(vcSpeedSq);
           final vcDir = vc / vcSpeed;
-          final slipAccel = cfg.clothSlidingFriction * _g;
-          final slipStep = 3.5 * slipAccel * subDt;
           if (vcSpeed <= slipStep) {
             final rolling = b.vel - vcDir * (vcSpeed / 3.5);
             b.vel = rolling;
@@ -1075,46 +1300,47 @@ void _applyFriction(
             b.spin = b.spin + vcDir * (2.5 * slipAccel * subDt);
           }
         } else {
-          final speed = b.vel.distance;
-          if (speed > 4e-4) {
-            // Dr. Dave TP B.2: the off-centre normal force that produces
-            // rolling resistance also creates a small lateral force when the
-            // ball has sidespin. Integrate its turn rate only in the rolling
-            // regime; sliding and airborne motion use their own contact laws.
-            // Solve TP B.2's force-balance relation:
-            // sin(theta) - muR*cos(theta) = (2/5)*muR.
-            final turnNormalAngle = math.atan(cfg.clothRollingResistance) +
-                math.asin(
-                  (2.0 / 5.0) *
-                      cfg.clothRollingResistance /
-                      math.sqrt(
-                        1.0 +
-                            cfg.clothRollingResistance *
-                                cfg.clothRollingResistance,
-                      ),
-                );
-            final turnRate = (2.0 / 5.0) *
-                b.radius *
-                spinZDecayRateRadPerSec2 *
-                math.sin(turnNormalAngle) /
-                (speed * (2.0 / 5.0 + math.cos(turnNormalAngle)));
-            final spinDuration = b.spinZ.abs() > 0.02
-                ? math.min(subDt, b.spinZ.abs() / spinZDecayRateRadPerSec2)
-                : 0.0;
-            final turnAngle = -b.spinZ.sign * turnRate * spinDuration;
-            final cosTurn = math.cos(turnAngle);
-            final sinTurn = math.sin(turnAngle);
-            final turnedVelocity = Vec2(
-              b.vel.x * cosTurn - b.vel.y * sinTurn,
-              b.vel.x * sinTurn + b.vel.y * cosTurn,
-            );
-            final rollingDecel = cfg.clothRollingResistance * _g * subDt;
-            if (speed <= rollingDecel) {
-              b.vel = Vec2.zero;
-              b.spin = Vec2.zero;
+          final speedSq = b.vel3.x * b.vel3.x + b.vel3.y * b.vel3.y;
+          if (speedSq > 1.6e-7) {
+            final speed = math.sqrt(speedSq);
+            if (b.spinZ.abs() > 0.02) {
+              // Dr. Dave TP B.2: the off-centre normal force that produces
+              // rolling resistance also creates a small lateral force when the
+              // ball has sidespin. Integrate its turn rate only in the rolling
+              // regime; sliding and airborne motion use their own contact laws.
+              final turnRate = (2.0 / 5.0) *
+                  b.radius *
+                  spinZDecayRateRadPerSec2 *
+                  cfg.rollingTurnFactor /
+                  speed;
+              final spinDuration = math.min(
+                subDt,
+                b.spinZ.abs() / spinZDecayRateRadPerSec2,
+              );
+              final turnAngle = -b.spinZ.sign * turnRate * spinDuration;
+              final cosTurn = math.cos(turnAngle);
+              final sinTurn = math.sin(turnAngle);
+              final turnedVelocity = Vec2(
+                b.vel.x * cosTurn - b.vel.y * sinTurn,
+                b.vel.x * sinTurn + b.vel.y * cosTurn,
+              );
+              if (speed <= rollingDecel) {
+                b.vel = Vec2.zero;
+                b.spin = Vec2.zero;
+              } else {
+                b.vel =
+                    turnedVelocity - turnedVelocity.normalized * rollingDecel;
+                b.spin = b.vel;
+              }
             } else {
-              b.vel = turnedVelocity - turnedVelocity.normalized * rollingDecel;
-              b.spin = b.vel;
+              if (speed <= rollingDecel) {
+                b.vel = Vec2.zero;
+                b.spin = Vec2.zero;
+              } else {
+                final scale = (speed - rollingDecel) / speed;
+                b.vel = Vec2(b.vel3.x * scale, b.vel3.y * scale);
+                b.spin = b.vel;
+              }
             }
           } else {
             b.vel = Vec2.zero;
@@ -1123,16 +1349,19 @@ void _applyFriction(
         }
 
         if (b.spinZ.abs() > 0.02) {
-          final decay = spinZDecayRateRadPerSec2 * subDt;
-          b.spinZ =
-              b.spinZ.abs() <= decay ? 0.0 : b.spinZ - decay * b.spinZ.sign;
+          b.spinZ = b.spinZ.abs() <= spinZDecay
+              ? 0.0
+              : b.spinZ - spinZDecay * b.spinZ.sign;
         } else {
           b.spinZ = 0.0;
         }
 
-        if (b.vel.distance < 3e-4 &&
-            b.spin.distance < 3e-4 &&
-            b.spinZ.abs() < 0.02) {
+        if (b.spinZ.abs() < 0.02 &&
+            (b.vel3.x * b.vel3.x + b.vel3.y * b.vel3.y) < 9e-8 &&
+            (b.angularVelocity.x * b.angularVelocity.x +
+                        b.angularVelocity.y * b.angularVelocity.y) *
+                    (b.radius * b.radius) <
+                9e-8) {
           b.vel = Vec2.zero;
           b.spin = Vec2.zero;
           b.spinZ = 0.0;
@@ -1197,23 +1426,52 @@ class _HertzChainResolution {
 _HertzChainResolution _resolveHertzChains(
   List<_Ball> balls,
   String cueBallId,
-  Map<String, Vec3>? previousPositions,
-  Map<String, Vec3>? previousVelocities,
-  Map<String, Vec3>? previousAngularVelocities,
   double durationSeconds,
   double ballBallRestitution,
 ) {
-  if (balls.length < 3 ||
-      previousPositions == null ||
-      previousVelocities == null ||
-      previousAngularVelocities == null ||
-      durationSeconds <= 0) {
+  if (balls.length < 3 || durationSeconds <= 0) {
+    return const _HertzChainResolution(<String>{}, null);
+  }
+
+  // Fast path: a 3+ ball collinear contact chain requires at least 2 active
+  // ball pairs to be touching or impacting during this timestep.
+  var contactingPairs = 0;
+  for (var i = 0; i < balls.length; i++) {
+    final bi = balls[i];
+    if (!bi.active) continue;
+    final posI = bi.prevPos3;
+    final touchDist = 2 * bi.radius + 1e-6;
+    final touchDistSq = touchDist * touchDist;
+    for (var j = i + 1; j < balls.length; j++) {
+      final bj = balls[j];
+      if (!bj.active) continue;
+      final posJ = bj.prevPos3;
+      final dx = posJ.x - posI.x;
+      final dy = posJ.y - posI.y;
+      final dz = posJ.z - posI.z;
+      final touching = (dx * dx + dy * dy + dz * dz) <= touchDistSq;
+      if (touching ||
+          _ballBallTimeOfImpactFraction(
+                posI,
+                posJ,
+                bi.pos3,
+                bj.pos3,
+                bi.radius,
+              ) !=
+              null) {
+        contactingPairs++;
+        if (contactingPairs >= 2) break;
+      }
+    }
+    if (contactingPairs >= 2) break;
+  }
+  if (contactingPairs < 2) {
     return const _HertzChainResolution(<String>{}, null);
   }
 
   final unvisited = <int>{
     for (var i = 0; i < balls.length; i++)
-      if (balls[i].active && previousPositions.containsKey(balls[i].id)) i,
+      if (balls[i].active) i,
   };
   final handledIds = <String>{};
   Vec2? cueContact;
@@ -1225,9 +1483,9 @@ _HertzChainResolution _resolveHertzChains(
     final queue = <int>[seed];
     while (queue.isNotEmpty) {
       final i = queue.removeLast();
-      final posI = previousPositions[balls[i].id]!;
+      final posI = balls[i].prevPos3;
       for (final j in unvisited.toList()) {
-        final posJ = previousPositions[balls[j].id]!;
+        final posJ = balls[j].prevPos3;
         final touching = (posJ - posI).length <= 2 * balls[i].radius + 1e-6;
         final willContact = _ballBallTimeOfImpactFraction(
           posI,
@@ -1250,8 +1508,7 @@ _HertzChainResolution _resolveHertzChains(
     var greatestDistanceSquared = 0.0;
     for (var i = 0; i < cluster.length; i++) {
       for (var j = i + 1; j < cluster.length; j++) {
-        final delta = previousPositions[balls[cluster[j]].id]! -
-            previousPositions[balls[cluster[i]].id]!;
+        final delta = balls[cluster[j]].prevPos3 - balls[cluster[i]].prevPos3;
         if (delta.lengthSquared > greatestDistanceSquared) {
           greatestDistanceSquared = delta.lengthSquared;
           firstIndex = cluster[i];
@@ -1260,29 +1517,27 @@ _HertzChainResolution _resolveHertzChains(
       }
     }
     if (greatestDistanceSquared < 1e-12) continue;
-    final axis = (previousPositions[balls[lastIndex].id]! -
-            previousPositions[balls[firstIndex].id]!)
-        .normalized();
+    final axis =
+        (balls[lastIndex].prevPos3 - balls[firstIndex].prevPos3).normalized();
     final ordered = cluster.toList()
       ..sort(
-        (a, b) => previousPositions[balls[a].id]!
-            .dot(axis)
-            .compareTo(previousPositions[balls[b].id]!.dot(axis)),
+        (a, b) =>
+            balls[a].prevPos3.dot(axis).compareTo(balls[b].prevPos3.dot(axis)),
       );
-    final origin = previousPositions[balls[ordered.first].id]!;
+    final origin = balls[ordered.first].prevPos3;
     var collinear = true;
     var spinFree = true;
     for (final index in ordered) {
       final ball = balls[index];
-      final positionDelta = previousPositions[ball.id]! - origin;
+      final positionDelta = ball.prevPos3 - origin;
       final positionResidual = positionDelta - axis * positionDelta.dot(axis);
-      final velocity = previousVelocities[ball.id]!;
+      final velocity = ball.prevVel3;
       final velocityResidual = velocity - axis * velocity.dot(axis);
       if (positionResidual.length > 1e-6 || velocityResidual.length > 1e-4) {
         collinear = false;
         break;
       }
-      if (previousAngularVelocities[ball.id]!.length > 1e-4) {
+      if (ball.prevAngularVelocity.length > 1e-4) {
         spinFree = false;
         break;
       }
@@ -1295,8 +1550,8 @@ _HertzChainResolution _resolveHertzChains(
     var validSpacing = true;
     for (var i = 0; i < ordered.length; i++) {
       final ball = balls[ordered[i]];
-      final position = previousPositions[ball.id]!;
-      final velocity = previousVelocities[ball.id]!;
+      final position = ball.prevPos3;
+      final velocity = ball.prevVel3;
       initialPositions.add(position.dot(axis));
       initialVelocities.add(velocity.dot(axis));
       if (i == 0) continue;
@@ -1305,8 +1560,8 @@ _HertzChainResolution _resolveHertzChains(
       final right = balls[ordered[i]];
       final initiallyTouching = gap <= 2 * left.radius + 1e-6;
       final hasImpactThisStep = _ballBallTimeOfImpactFraction(
-            previousPositions[left.id]!,
-            previousPositions[right.id]!,
+            left.prevPos3,
+            right.prevPos3,
             left.pos3,
             right.pos3,
             left.radius,
@@ -1337,8 +1592,8 @@ _HertzChainResolution _resolveHertzChains(
         if (neighborIndex < 0 || neighborIndex >= ordered.length) continue;
         final cueBall = balls[ordered[cueIndex]];
         final neighbor = balls[ordered[neighborIndex]];
-        final cueStart = previousPositions[cueBall.id]!;
-        final neighborStart = previousPositions[neighbor.id]!;
+        final cueStart = cueBall.prevPos3;
+        final neighborStart = neighbor.prevPos3;
         final fraction =
             (neighborStart - cueStart).length <= 2 * cueBall.radius + 1e-6
                 ? 0.0
@@ -1356,7 +1611,7 @@ _HertzChainResolution _resolveHertzChains(
       }
       if (firstImpactFraction != null) {
         final cueBall = balls[ordered[cueIndex]];
-        final start = previousPositions[cueBall.id]!;
+        final start = cueBall.prevPos3;
         clusterCueContact = Vec2(
           start.x + (cueBall.pos3.x - start.x) * firstImpactFraction,
           start.y + (cueBall.pos3.y - start.y) * firstImpactFraction,
@@ -1368,7 +1623,7 @@ _HertzChainResolution _resolveHertzChains(
       final ball = balls[ordered[i]];
       ball.pos3 = perpendicularOffset + axis * result.positions[i];
       ball.vel3 = axis * result.velocities[i];
-      ball.angularVelocity = previousAngularVelocities[ball.id]!;
+      ball.angularVelocity = ball.prevAngularVelocity;
       handledIds.add(ball.id);
     }
     cueContact ??= clusterCueContact;
@@ -1381,9 +1636,6 @@ Vec2? _resolveCollisions(
   List<_Ball> balls,
   String cueBallId,
   _Cfg cfg, {
-  Map<String, Vec3>? previousPositions,
-  Map<String, Vec3>? previousVelocities,
-  Map<String, Vec3>? previousAngularVelocities,
   double ballBallFrictionScale = 1.0,
   double ballBallRestitution = _eBall,
   double timeSec = 0.0,
@@ -1393,44 +1645,47 @@ Vec2? _resolveCollisions(
   final hertz = _resolveHertzChains(
     balls,
     cueBallId,
-    previousPositions,
-    previousVelocities,
-    previousAngularVelocities,
     timeStepSec,
     ballBallRestitution,
   );
   Vec2? firstContact = hertz.cueContact;
   for (int i = 0; i < balls.length; i++) {
+    final a = balls[i];
+    if (!a.active) continue;
     for (int j = i + 1; j < balls.length; j++) {
-      final a = balls[i];
       final b = balls[j];
-      if (!a.active || !b.active) continue;
-      if (hertz.ballIds.contains(a.id) && hertz.ballIds.contains(b.id)) {
+      if (!b.active) continue;
+      if (hertz.ballIds.isNotEmpty &&
+          hertz.ballIds.contains(a.id) &&
+          hertz.ballIds.contains(b.id)) {
         continue;
       }
 
-      final previousA = previousPositions?[a.id];
-      final previousB = previousPositions?[b.id];
+      final previousA = a.prevPos3;
+      final previousB = b.prevPos3;
       final currentA = a.pos3;
       final currentB = b.pos3;
-      final timeOfImpact = previousA != null && previousB != null
-          ? _ballBallTimeOfImpactFraction(
-              previousA,
-              previousB,
-              currentA,
-              currentB,
-              a.radius,
-            )
-          : null;
+      final timeOfImpact = _ballBallTimeOfImpactFraction(
+        previousA,
+        previousB,
+        currentA,
+        currentB,
+        a.radius,
+      );
       final impactA = timeOfImpact == null
           ? currentA
-          : previousA! + (currentA - previousA) * timeOfImpact;
+          : previousA + (currentA - previousA) * timeOfImpact;
       final impactB = timeOfImpact == null
           ? currentB
-          : previousB! + (currentB - previousB) * timeOfImpact;
-      final delta3 = impactB - impactA;
-      final dist = delta3.length;
-      if ((dist < 2 * a.radius || timeOfImpact != null) && dist > 1e-6) {
+          : previousB + (currentB - previousB) * timeOfImpact;
+      final dx = impactB.x - impactA.x;
+      final dy = impactB.y - impactA.y;
+      final dz = impactB.z - impactA.z;
+      final distSq = dx * dx + dy * dy + dz * dz;
+      final twoR = 2 * a.radius;
+      if ((distSq < twoR * twoR || timeOfImpact != null) && distSq > 1e-12) {
+        final dist = math.sqrt(distSq);
+        final delta3 = Vec3(dx, dy, dz);
         final n3 = delta3 / dist;
         final horizontalLength = math.sqrt(n3.x * n3.x + n3.y * n3.y);
         final n = horizontalLength > 1e-9
@@ -1445,9 +1700,7 @@ Vec2? _resolveCollisions(
         final angularVelocityBeforeImpactB = b.angularVelocity;
         final isInitialFrozenCuePair = timeSec <= timeStepSec + 1e-9 &&
             (a.id == cueBallId || b.id == cueBallId) &&
-            previousPositions != null &&
-            (previousPositions[b.id]! - previousPositions[a.id]!).length <=
-                2 * a.radius + 1e-8;
+            (previousB - previousA).length <= 2 * a.radius + 1e-8;
 
         final overlap = 2 * a.radius - dist;
         if (timeOfImpact != null) {
@@ -1563,12 +1816,17 @@ double? _ballBallTimeOfImpactFraction(
   Vec3 b1, [
   double radius = _R,
 ]) {
-  final separation0 = b0 - a0;
-  final separationDelta = (b1 - a1) - separation0;
-  final aa = separationDelta.lengthSquared;
-  final bb = 2 * separation0.dot(separationDelta);
-  final cc = separation0.lengthSquared - 4 * radius * radius;
-  if (aa < 1e-18 || cc < -1e-12 || bb >= 0) return null;
+  final sx = b0.x - a0.x;
+  final sy = b0.y - a0.y;
+  final sz = b0.z - a0.z;
+  final dx = (b1.x - a1.x) - sx;
+  final dy = (b1.y - a1.y) - sy;
+  final dz = (b1.z - a1.z) - sz;
+  final bb = 2 * (sx * dx + sy * dy + sz * dz);
+  if (bb >= 0) return null;
+  final aa = dx * dx + dy * dy + dz * dz;
+  final cc = (sx * sx + sy * sy + sz * sz) - 4 * radius * radius;
+  if (aa < 1e-18 || cc < -1e-12) return null;
 
   final discriminant = bb * bb - 4 * aa * cc;
   if (discriminant < 0) return null;
@@ -1841,7 +2099,6 @@ int _resolveCushions(
   List<_Ball> balls,
   _Cfg cfg,
   CushionProfile profile, {
-  Set<String>? contactIds,
   List<CushionContact>? contactDetails,
   double timeSec = 0.0,
 }) {
@@ -1885,40 +2142,40 @@ int _resolveCushions(
   for (final b in balls) {
     if (!b.active) continue;
 
-    if (b.pos.x < b.radius && _railFacePresentAtEdge('left', b.pos, cfg)) {
-      b.pos = Vec2(b.radius, b.pos.y);
+    if (b.pos3.x < b.radius && _railFacePresentAtEdge('left', b.pos, cfg)) {
+      b.pos = Vec2(b.radius, b.pos3.y);
       if (-b.vel3.x > 0) {
         contacts++;
-        contactIds?.add(b.id);
+        b.hadContactThisStep = true;
         impact(b, const Vec3(1, 0, 0), const Vec3(0, 1, 0), 'left');
       }
     }
 
-    if (b.pos.x > cfg.W - b.radius &&
+    if (b.pos3.x > cfg.W - b.radius &&
         _railFacePresentAtEdge('right', b.pos, cfg)) {
-      b.pos = Vec2(cfg.W - b.radius, b.pos.y);
+      b.pos = Vec2(cfg.W - b.radius, b.pos3.y);
       if (b.vel3.x > 0) {
         contacts++;
-        contactIds?.add(b.id);
+        b.hadContactThisStep = true;
         impact(b, const Vec3(-1, 0, 0), const Vec3(0, 1, 0), 'right');
       }
     }
 
-    if (b.pos.y < b.radius && _railFacePresentAtEdge('top', b.pos, cfg)) {
-      b.pos = Vec2(b.pos.x, b.radius);
+    if (b.pos3.y < b.radius && _railFacePresentAtEdge('top', b.pos, cfg)) {
+      b.pos = Vec2(b.pos3.x, b.radius);
       if (-b.vel3.y > 0) {
         contacts++;
-        contactIds?.add(b.id);
+        b.hadContactThisStep = true;
         impact(b, const Vec3(0, 1, 0), const Vec3(1, 0, 0), 'top');
       }
     }
 
-    if (b.pos.y > cfg.H - b.radius &&
+    if (b.pos3.y > cfg.H - b.radius &&
         _railFacePresentAtEdge('bottom', b.pos, cfg)) {
-      b.pos = Vec2(b.pos.x, cfg.H - b.radius);
+      b.pos = Vec2(b.pos3.x, cfg.H - b.radius);
       if (b.vel3.y > 0) {
         contacts++;
-        contactIds?.add(b.id);
+        b.hadContactThisStep = true;
         impact(b, const Vec3(0, -1, 0), const Vec3(1, 0, 0), 'bottom');
       }
     }
@@ -1948,96 +2205,27 @@ bool _railFacePresentAtEdge(String edge, Vec2 pos, _Cfg cfg) {
   }
 }
 
-List<_CornerFrame> _cornerFrames(_Cfg cfg) => [
-      const _CornerFrame('topLeft', Vec2.zero, 1, 1),
-      _CornerFrame('topRight', Vec2(cfg.W, 0), -1, 1),
-      _CornerFrame('bottomLeft', Vec2(0, cfg.H), 1, -1),
-      _CornerFrame('bottomRight', Vec2(cfg.W, cfg.H), -1, -1),
-    ];
-
-List<_PocketSegment> _cornerFacingSegments(_Cfg cfg) {
-  final leg = cfg.cornerJawR;
-  final length = cfg.cornerFacingLength;
-  final dx = math.cos(cfg.cornerFacingAngle) * length;
-  final dy = math.sin(cfg.cornerFacingAngle) * length;
-  final result = <_PocketSegment>[];
-  for (final corner in _cornerFrames(cfg)) {
-    result.add(
-      _PocketSegment(
-        corner.name,
-        'longRailFacing',
-        corner.toWorld(Vec2(leg, 0)),
-        corner.toWorld(Vec2(leg - dx, -dy)),
-      ),
-    );
-    result.add(
-      _PocketSegment(
-        corner.name,
-        'shortRailFacing',
-        corner.toWorld(Vec2(0, leg)),
-        corner.toWorld(Vec2(-dy, leg - dx)),
-      ),
-    );
-  }
-  return result;
-}
-
-// Side-pocket facings start at the rounded jaw tips at x = W/2 ± hw on the
-// top/bottom rails and angle inward by sideFacingAngle (13°, i.e. 103° to the
-// adjacent rail nose) across pocketCushionDepthInches into the pocket throat.
-List<_PocketSegment> _sideFacingSegments(_Cfg cfg) {
-  final hw = cfg.sidePocketHalfW;
-  final length = cfg.sideFacingLength;
-  final dx = math.sin(cfg.sideFacingAngle) * length;
-  final dy = math.cos(cfg.sideFacingAngle) * length;
-  return [
-    _PocketSegment(
-      'topSide',
-      'leftFacing',
-      Vec2(cfg.W / 2 - hw, 0),
-      Vec2(cfg.W / 2 - hw + dx, -dy),
-    ),
-    _PocketSegment(
-      'topSide',
-      'rightFacing',
-      Vec2(cfg.W / 2 + hw, 0),
-      Vec2(cfg.W / 2 + hw - dx, -dy),
-    ),
-    _PocketSegment(
-      'bottomSide',
-      'leftFacing',
-      Vec2(cfg.W / 2 - hw, cfg.H),
-      Vec2(cfg.W / 2 - hw + dx, cfg.H + dy),
-    ),
-    _PocketSegment(
-      'bottomSide',
-      'rightFacing',
-      Vec2(cfg.W / 2 + hw, cfg.H),
-      Vec2(cfg.W / 2 + hw - dx, cfg.H + dy),
-    ),
-  ];
-}
-
 // The ball's centre drops as soon as it enters the rendered black hole. The
 // facings can still reject it before that boundary; once its centre crosses
 // the circle, the ball is no longer supported by the shelf.
 _CornerFrame? _capturingCorner(Vec2 pos, _Cfg cfg) {
-  final captureRadius = cfg.cornerHoleR;
-  for (final corner in _cornerFrames(cfg)) {
-    final holeCenter = corner.toWorld(
-      Vec2(-cfg.cornerHoleOffset, -cfg.cornerHoleOffset),
-    );
-    if ((pos - holeCenter).distance < captureRadius) return corner;
+  final captureRadiusSq = cfg.cornerHoleR * cfg.cornerHoleR;
+  for (final corner in cfg.cornerFrames) {
+    final dx = pos.x - corner.holeCenter.x;
+    final dy = pos.y - corner.holeCenter.y;
+    if (dx * dx + dy * dy < captureRadiusSq) return corner;
   }
   return null;
 }
 
 String? _capturingSidePocket(Vec2 pos, _Cfg cfg) {
-  final captureRadius = cfg.sideHoleR;
-  final topHoleCenter = Vec2(cfg.W / 2, -cfg.sideHoleOffset);
-  if ((pos - topHoleCenter).distance < captureRadius) return 'topSide';
-  final bottomHoleCenter = Vec2(cfg.W / 2, cfg.H + cfg.sideHoleOffset);
-  if ((pos - bottomHoleCenter).distance < captureRadius) return 'bottomSide';
+  final captureRadiusSq = cfg.sideHoleR * cfg.sideHoleR;
+  final dx = pos.x - cfg.W / 2;
+  if (dx * dx >= captureRadiusSq) return null;
+  final dyTop = pos.y + cfg.sideHoleOffset;
+  if (dx * dx + dyTop * dyTop < captureRadiusSq) return 'topSide';
+  final dyBottom = pos.y - (cfg.H + cfg.sideHoleOffset);
+  if (dx * dx + dyBottom * dyBottom < captureRadiusSq) return 'bottomSide';
   return null;
 }
 
@@ -2045,7 +2233,7 @@ bool _onCornerShelfOrBetweenJaws(Vec2 pos, _Cfg cfg) {
   if (_capturingCorner(pos, cfg) != null) return false;
   final leg = cfg.cornerJawR;
   final outsideLimit = cfg.cornerHoleR;
-  for (final corner in _cornerFrames(cfg)) {
+  for (final corner in cfg.cornerFrames) {
     final local = corner.toLocal(pos);
     if (local.x + local.y < leg &&
         local.x >= -outsideLimit &&
@@ -2066,13 +2254,14 @@ bool _nearSidePocket(Vec2 pos, _Cfg cfg) {
 }
 
 Vec2 _closestPointOnSegment(Vec2 point, Vec2 start, Vec2 end) {
-  final segment = end - start;
-  final lengthSquared = segment.x * segment.x + segment.y * segment.y;
+  final sx = end.x - start.x;
+  final sy = end.y - start.y;
+  final lengthSquared = sx * sx + sy * sy;
   if (lengthSquared < 1e-16) return start;
-  final offset = point - start;
-  final t = ((offset.x * segment.x + offset.y * segment.y) / lengthSquared)
-      .clamp(0.0, 1.0);
-  return start + segment * t;
+  final ox = point.x - start.x;
+  final oy = point.y - start.y;
+  final t = ((ox * sx + oy * sy) / lengthSquared).clamp(0.0, 1.0);
+  return Vec2(start.x + sx * t, start.y + sy * t);
 }
 
 // Resolve the full corner-pocket and side-pocket facing segments.
@@ -2082,82 +2271,97 @@ int _resolvePocketGeometry(
   List<_Ball> balls,
   _Cfg cfg,
   CushionProfile profile, {
-  Set<String>? contactIds,
   List<PocketContact>? contactDetails,
   double timeSec = 0.0,
 }) {
   var contacts = 0;
-  final surfacesThisStep = <String, Set<String>>{};
+  final facings = cfg.pocketFacings;
+  final margin = cfg.pocketCheckMargin;
 
-  void impact(
-    _Ball ball,
-    Vec2 closest,
-    String pocket,
-    String surface,
-    Vec2? segmentDirection,
-  ) {
-    final delta = ball.pos - closest;
-    final distance = delta.distance;
-    if (distance >= ball.radius || distance < 1e-8) return;
-    final normal2 = delta / distance;
-    final normal3 = Vec3(normal2.x, normal2.y, 0);
-    if (-ball.vel3.dot(normal3) <= 0) return;
-
-    final surfaceKey = '$pocket/$surface';
-    surfacesThisStep.putIfAbsent(ball.id, () => <String>{}).add(surfaceKey);
-    final isNewContact = !ball.activePocketSurfaces.contains(surfaceKey);
-
-    final incidentSpeed = ball.vel3.length;
-    ball.pos = closest + normal2 * ball.radius;
-    final tangent2 = segmentDirection ?? Vec2(-normal2.y, normal2.x);
-    _applyLegacyCushionImpact(
-      ball,
-      normal3,
-      Vec3(tangent2.x, tangent2.y, 0),
-      profile,
-      profile.pocketFacingRestitution,
-      includeVerticalFriction: false,
-    );
-    _limitAngularSpeed(ball);
-    contacts++;
-    contactIds?.add(ball.id);
-    if (isNewContact) {
-      contactDetails?.add(
-        PocketContact(
-          timeSec: timeSec,
-          ballId: ball.id,
-          pocket: pocket,
-          surface: surface,
-          positionRel: _metersToRel(ball.pos, cfg),
-          incidentSpeedMs: incidentSpeed,
-          reboundSpeedMs: ball.vel3.length,
-        ),
-      );
-    }
-  }
-
-  final facings = [
-    ..._cornerFacingSegments(cfg),
-    ..._sideFacingSegments(cfg),
-  ];
   for (final b in balls) {
     if (!b.active) continue;
-    for (final facing in facings) {
-      final closest = _closestPointOnSegment(b.pos, facing.start, facing.end);
-      final direction = (facing.end - facing.start).normalized;
-      impact(b, closest, facing.pocket, facing.surface, direction);
+    final bx = b.pos3.x;
+    final by = b.pos3.y;
+    if (bx >= margin &&
+        bx <= cfg.W - margin &&
+        by >= margin &&
+        by <= cfg.H - margin) {
+      if (b.activePocketSurfaces.isNotEmpty) {
+        b.activePocketSurfaces = const <String>{};
+      }
+      continue;
     }
-  }
-  for (final b in balls) {
-    b.activePocketSurfaces = surfacesThisStep[b.id] ?? <String>{};
+
+    Set<String>? ballSurfaces;
+    final r = b.radius;
+    for (var i = 0; i < facings.length; i++) {
+      final facing = facings[i];
+      if (bx < facing.minX - r ||
+          bx > facing.maxX + r ||
+          by < facing.minY - r ||
+          by > facing.maxY + r) {
+        continue;
+      }
+      final closest = _closestPointOnSegment(b.pos, facing.start, facing.end);
+      final dx = b.pos3.x - closest.x;
+      final dy = b.pos3.y - closest.y;
+      final distSq = dx * dx + dy * dy;
+      if (distSq >= r * r || distSq < 1e-16) continue;
+      final distance = math.sqrt(distSq);
+      final normal2 = Vec2(dx / distance, dy / distance);
+      final normal3 = Vec3(normal2.x, normal2.y, 0);
+      if (-b.vel3.dot(normal3) <= 0) continue;
+
+      final surfaceKey = '${facing.pocket}/${facing.surface}';
+      (ballSurfaces ??= <String>{}).add(surfaceKey);
+      final isNewContact = !b.activePocketSurfaces.contains(surfaceKey);
+
+      final incidentSpeed = b.vel3.length;
+      b.pos = closest + normal2 * r;
+      final tangent2 = facing.direction;
+      _applyLegacyCushionImpact(
+        b,
+        normal3,
+        Vec3(tangent2.x, tangent2.y, 0),
+        profile,
+        profile.pocketFacingRestitution,
+        includeVerticalFriction: false,
+      );
+      _limitAngularSpeed(b);
+      contacts++;
+      b.hadContactThisStep = true;
+      if (isNewContact) {
+        contactDetails?.add(
+          PocketContact(
+            timeSec: timeSec,
+            ballId: b.id,
+            pocket: facing.pocket,
+            surface: facing.surface,
+            positionRel: _metersToRel(b.pos, cfg),
+            incidentSpeedMs: incidentSpeed,
+            reboundSpeedMs: b.vel3.length,
+          ),
+        );
+      }
+    }
+    b.activePocketSurfaces = ballSurfaces ?? const <String>{};
   }
 
   return contacts;
 }
 
 void _checkPockets(List<_Ball> balls, _Cfg cfg) {
+  final margin = cfg.pocketCheckMargin;
   for (final b in balls) {
     if (!b.active) continue;
+    final bx = b.pos3.x;
+    final by = b.pos3.y;
+    if (bx >= margin &&
+        bx <= cfg.W - margin &&
+        by >= margin &&
+        by <= cfg.H - margin) {
+      continue;
+    }
     if (b.pos3.z > b.radius + 0.002) continue;
     // Both corner and side pockets require the ball's centre to cross the
     // pocket hole circle past the shelf; the facings can reject it before then.
