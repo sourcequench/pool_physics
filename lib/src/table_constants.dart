@@ -18,6 +18,12 @@ const double sideHoleRadiusInches = 2.5;
 const double sideShelfInches = 0.1875;
 const double sideFacingAngleDegrees = 13.0;
 const double pocketCushionDepthInches = 2.25;
+// Height of the rail cap (the back of the pocket) above the cushion nose.
+// Measured with calipers on the owner's Diamond table (2026-10-31): slightly
+// more than 1/8 in. A ball over a pocket hole whose lowest point is below the
+// rail cap strikes the back of the pocket and drops; only a ball above it can
+// clear the pocket.
+const double railCapAboveNoseInches = 0.125;
 const double inchesToMeters = 0.0254;
 
 /// Derive a corner-pocket face angle from the measurements in Dr. Dave TP B.15.

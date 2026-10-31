@@ -92,6 +92,8 @@ the numerical values used.
 | Corner pocket facing angle: 38.32° | TP B.15 | Derived from 4.5″ mouth, 3.75″ throat, 2.0″ cushion depth |
 | Side pocket mouth / facing angle: 5.0″ / 13.0° | TP 3.5 / BCA / WPA | 103° cut angle to rail nose across 2.25″ cushion depth |
 | Side pocket shelf / hole radius: 0.1875″ / 2.5″ | TP 3.5 / BCA / Diamond | 3/16″ nominal shelf (0″–3/8″ BCA spec) before 2.5″-radius hole |
+| Rail cap above cushion nose: 0.125″ | Direct caliper measurement, Diamond table (2026-10-31) | Measured slightly over 1/8″; no published WPA/BCA figure found. Sets the pocket back: a ball over a hole is captured while its lowest point is below nose height + 0.125″ |
+| Fast-shot speed band: 1.9–3.2 m/s (4–7 mph) | Dr. Dave, "How fast does the CB travel?" (drdavepoolinfo.com/?p=2486) | Upper bound used as the TP 3.7 / 3.8 "fast" speed in `pocket_opening_test.dart` |
 | Nine-foot table play surface: 100″ × 50″ | Diamond Pro-Am specs | `PhysicsTableConfig.nineFootDiamond` |
 | Rail width: 7/114 of table width | Normalized from Diamond specs | Same fraction applies to both short and long rails |
 | Ball diameter: 2.25 in (0.05715 m) | BCA / WPA | Standard pool ball |

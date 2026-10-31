@@ -858,7 +858,7 @@ PhysicsResult simulate({
           }
         }
       }
-      _checkPockets(simBalls, cfg);
+      _checkPockets(simBalls, cfg, cushion);
     }
     if (!forSolver) {
       for (final b in simBalls) {
@@ -2350,8 +2350,14 @@ int _resolvePocketGeometry(
   return contacts;
 }
 
-void _checkPockets(List<_Ball> balls, _Cfg cfg) {
+void _checkPockets(List<_Ball> balls, _Cfg cfg, CushionProfile profile) {
   final margin = cfg.pocketCheckMargin;
+  // The back of every pocket is the rail cap. A ball whose centre is over the
+  // hole and whose lowest point is below the cap either drops straight in or
+  // strikes the back of the pocket and then drops, so capture does not require
+  // cloth contact. Only a ball high enough to clear the rail cap escapes.
+  final pocketBackHeight =
+      profile.noseHeightMm / 1000.0 + railCapAboveNoseInches * inchesToMeters;
   for (final b in balls) {
     if (!b.active) continue;
     final bx = b.pos3.x;
@@ -2362,7 +2368,7 @@ void _checkPockets(List<_Ball> balls, _Cfg cfg) {
         by <= cfg.H - margin) {
       continue;
     }
-    if (b.pos3.z > b.radius + 0.002) continue;
+    if (b.pos3.z - b.radius >= pocketBackHeight) continue;
     // Both corner and side pockets require the ball's centre to cross the
     // pocket hole circle past the shelf; the facings can reject it before then.
     if (_capturingCorner(b.pos, cfg) != null ||
