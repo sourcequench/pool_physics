@@ -889,4 +889,112 @@ void main() {
       }
     }
   });
+
+  test('TP B.8 8 ft draw benchmark separates impact assumptions', () {
+    const cueSpeedMph = 12.5;
+    const dragDistanceFt = 8.0;
+    const offsetFraction = 0.763;
+    const gap = 0.005;
+    final cueSpeedMs = cueSpeedMph * 0.44704;
+    final dragDistance = dragDistanceFt * 0.3048;
+    final cuePosition = const Vec2(5.0, 1.5);
+    final objectPosition = Vec2(
+      cuePosition.x + dragDistance + 2 * _radius + gap,
+      cuePosition.y,
+    );
+    const efficiency = 0.87; // TP B.8's stated typical tip efficiency.
+    final offsetR = 0.5 * offsetFraction;
+    final speedMs = cueSpeedMs *
+        cueBallSpeedRatioFromCueImpact(
+          tipOffsetR: offsetR,
+          energyEfficiency: efficiency,
+        );
+    for (final (name, restitution, frictionScale, expectedDrawFt) in [
+      ('DrDave ideal e=1, mu=0', 1.0, 0.0, 7.986),
+      ('e=.93, mu=0', 0.93, 0.0, 5.703),
+      ('e=1, app mu curve', 1.0, 1.0, 6.758),
+      ('pool e=.93, app mu curve', 0.93, 1.0, 4.712),
+      ('e=.93, mu=.06', 0.93, 0.06 / ballBallFrictionForSlip(2.37), 2.781),
+    ]) {
+      final cuePositionRel = _toLongTableRelative(cuePosition);
+      final result = simulate(
+        balls: [
+          PhysicsBall(id: 'cue', x: cuePositionRel.x, y: cuePositionRel.y),
+          PhysicsBall(
+            id: 'ob',
+            x: _toLongTableRelative(objectPosition).x,
+            y: _toLongTableRelative(objectPosition).y,
+          ),
+        ],
+        cueBallId: 'cue',
+        shot: ShotParams(
+          aimDir: const Vec2(1, 0),
+          speedMs: speedMs,
+          hitY: -offsetR,
+          elevationDeg: 0,
+        ),
+        tableConfig: const PhysicsTableConfig(
+          playW: _longTableW,
+          playH: _longTableH,
+          minimumCueElevationDeg: 0,
+          clothSlidingFriction: 0.20,
+          clothRollingResistance: 0.010,
+        ),
+        ballBallRestitution: restitution,
+        ballBallFrictionScale: frictionScale,
+        maxTimeSeconds: 8.0,
+      );
+      final netTravel = (result.endPositions['cue']!.x - cuePositionRel.x) /
+          _spanX *
+          _longTableW;
+      final draw = (dragDistance + gap - netTravel) / 0.3048;
+      expect(
+        draw,
+        closeTo(expectedDrawFt, 0.02),
+        reason: '$name at 12.5 mph cue speed, 8 ft drag, and '
+            '${(100 * offsetFraction).toStringAsFixed(1)}% of 0.5R offset',
+      );
+      if (name == 'DrDave ideal e=1, mu=0') {
+        expect(
+          draw,
+          closeTo(8.1, 0.15),
+          reason: 'TP B.8 ideal long-draw reference',
+        );
+      }
+    }
+  });
+
+  test('shared draw challenge recipe reproduces its pot and draw state', () {
+    const cueId = '3e6efd86-31a3-451c-9a91-1d0092b2d148';
+    const objectId = 'b5594030-2462-482c-98f9-3f9827419e27';
+    final result = simulate(
+      balls: const [
+        PhysicsBall(id: objectId, x: 0.7193, y: 0.239),
+        PhysicsBall(id: cueId, x: 0.2807, y: 0.4035),
+      ],
+      cueBallId: cueId,
+      shot: const ShotParams(
+        aimDir: Vec2(0.9791, -0.2034),
+        speedMs: 6.3222,
+        hitX: 0.017,
+        hitY: -0.9986,
+      ),
+      tableConfig: PhysicsTableConfig.nineFootDiamond,
+      maxTimeSeconds: 15.0,
+    );
+    expect(result.ballBallContactDetails, isNotEmpty);
+    final contact = result.ballBallContactDetails.first;
+    expect(result.pocketPositions[objectId], isNotNull);
+    expect(result.endPositions[cueId], isNotNull);
+    expect(
+      contact.cuePreImpactVelocity.length,
+      closeTo(5.836, 0.02),
+      reason: 'reference shot cue-ball speed at object-ball contact',
+    );
+    expect(
+      contact.cuePreImpactAngularVelocity.y * _radius,
+      closeTo(-6.416, 0.02),
+      reason: 'reference shot longitudinal draw spin at contact',
+    );
+  });
 }
